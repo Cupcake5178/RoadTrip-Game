@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from 'three';
 import type { World } from './world';
 import type { Obstacle } from './collision';
+import { CHARACTER_BODY } from './character';
 
 export class Physics {
   world!: RAPIER.World;
@@ -31,7 +32,7 @@ export class Physics {
     for (const obstacle of environment.collision.obstacles) this.addObstacle(obstacle);
     this.player = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
     this.playerCollider = this.world.createCollider(
-      RAPIER.ColliderDesc.capsule(0.5, 0.3).setFriction(0),
+      RAPIER.ColliderDesc.capsule(CHARACTER_BODY.halfHeight, CHARACTER_BODY.radius).setFriction(0),
       this.player,
     );
     this.controller = this.world.createCharacterController(0.025);
@@ -94,22 +95,39 @@ export class Physics {
   syncNPC(id: string, position: T.Vector3, enabled = true) {
     if (!this.npcBodies.has(id)) {
       const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
-      this.world.createCollider(RAPIER.ColliderDesc.capsule(0.38, 0.29), body);
+      this.world.createCollider(
+        RAPIER.ColliderDesc.capsule(
+          id === 'deer' ? 0.38 : CHARACTER_BODY.halfHeight,
+          id === 'deer' ? 0.29 : CHARACTER_BODY.radius,
+        ),
+        body,
+      );
       this.npcBodies.set(id, body);
     }
     const body = this.npcBodies.get(id)!;
     body.setEnabled(enabled);
-    if (enabled) body.setTranslation({ x: position.x, y: position.y + 0.7, z: position.z }, true);
+    if (enabled)
+      body.setTranslation(
+        { x: position.x, y: position.y + (id === 'deer' ? 0.7 : 0.88), z: position.z },
+        true,
+      );
   }
   movePlayer(position: T.Vector3, delta: T.Vector3) {
     this.player.setEnabled(true);
-    this.player.setTranslation({ x: position.x, y: position.y + 0.825, z: position.z }, true);
+    this.player.setTranslation(
+      { x: position.x, y: position.y + CHARACTER_BODY.centerY, z: position.z },
+      true,
+    );
     this.world.propagateModifiedBodyPositionsToColliders();
     this.controller.computeColliderMovement(this.playerCollider, delta);
     const actual = this.controller.computedMovement();
     this.grounded = this.controller.computedGrounded();
     const result = position.clone().add(new T.Vector3(actual.x, actual.y, actual.z));
-    this.player.setNextKinematicTranslation({ x: result.x, y: result.y + 0.825, z: result.z });
+    this.player.setNextKinematicTranslation({
+      x: result.x,
+      y: result.y + CHARACTER_BODY.centerY,
+      z: result.z,
+    });
     return {
       position: result,
       grounded: this.grounded,
@@ -119,9 +137,9 @@ export class Physics {
   canStandAt(position: T.Vector3) {
     this.world.propagateModifiedBodyPositionsToColliders();
     return !this.world.intersectionWithShape(
-      { x: position.x, y: position.y + 0.825, z: position.z },
+      { x: position.x, y: position.y + CHARACTER_BODY.centerY, z: position.z },
       { x: 0, y: 0, z: 0, w: 1 },
-      new RAPIER.Capsule(0.5, 0.32),
+      new RAPIER.Capsule(CHARACTER_BODY.halfHeight, CHARACTER_BODY.radius + 0.02),
       undefined,
       undefined,
       this.playerCollider,

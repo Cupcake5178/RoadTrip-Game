@@ -126,8 +126,8 @@ export function broadTree() {
   g.userData.assetId = 'tree';
   return g;
 }
-export function person(color = '#cba05f', seed = 1) {
-  const g = createCharacter(seed, color);
+export function person(identity = 0, seed = 1) {
+  const g = createCharacter(seed, identity);
   g.userData.assetId = 'person';
   return g;
 }
@@ -233,12 +233,12 @@ export function wagon(paint: string): Wagon {
       box(root, [0.72, 0.69, 0.16], [x, 1.54, z + 0.34], '#c7bc91', 0.12);
     }
   const passengers: T.Group[] = [];
-  for (const [x, z, col] of [
-    [0.5, 0, '#dfb858'],
-    [-0.5, 1.1, '#7fada2'],
-    [0.5, 1.1, '#a48ca9'],
+  for (const [x, z, identity] of [
+    [0.5, 0, 1],
+    [-0.5, 1.1, 2],
+    [0.5, 1.1, 3],
   ] as const) {
-    const p = person(col, passengers.length * 17 + 8);
+    const p = person(identity, passengers.length * 17 + 8);
     p.position.set(x, 0.83, z);
     p.scale.setScalar(0.78);
     root.add(p);

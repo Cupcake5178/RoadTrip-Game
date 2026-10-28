@@ -11,7 +11,7 @@ if not html.is_file():
 output = root / "downloads" / "RoadTrip-playable.zip"
 output.parent.mkdir(exist_ok=True)
 temporary = output.with_suffix(".zip.tmp")
-instructions = """ROAD TRIP — THE MOUNTAIN WEEKEND / v0.2
+instructions = """ROAD TRIP — THE MOUNTAIN WEEKEND / v0.2.1
 
 1. Extract this ZIP into a normal folder.
 2. Open RoadTrip.html in a recent desktop Chrome, Edge, or Firefox browser.

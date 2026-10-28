@@ -54,11 +54,11 @@ export class RoadsideLife {
     s: number,
     offset: number,
     dz: number,
-    color: string,
+    identity: number,
     seed: number,
     lines: string[],
   ) {
-    const root = createCharacter(seed, color);
+    const root = createCharacter(seed, identity);
     this.place(root, roadX(s) + offset, -s + dz, Math.PI * 0.2);
     this.people.set(id, { root, name, lines, count: 0, wave: 0 });
     this.world.addTarget(
@@ -145,17 +145,17 @@ export class RoadsideLife {
     this.parked(1100, 36, 13, '#83a29b');
     this.parked(4300, 12, -13, '#d1aa68');
     this.parked(5550, -17, 4, '#b8816e');
-    this.npc('sol', 'Sol', 1100, 35, -12, '#c78f60', 45, [
+    this.npc('sol', 'Sol', 1100, 35, -12, 1, 45, [
       'The good snacks are on the middle shelf. The emergency snacks are also on the middle shelf.',
       'Your wagon has character. That is what we call mysterious rattles around here.',
       'If the machine eats a coin, ask it politely. It has feelings. Probably.',
     ]);
-    this.npc('fern', 'Ranger Fern', 4300, 42, -12, '#8c9d70', 83, [
+    this.npc('fern', 'Ranger Fern', 4300, 42, -12, 3, 83, [
       'Pitch, fire, supper, stars. In that order. The stars are complimentary.',
       'The raccoon is not a ranger. Please stop asking him for directions.',
       'The fire stays in its stone ring. The stories can wander a little.',
     ]);
-    this.npc('otis', 'Otis', 5550, 18, 18, '#879aad', 92, [
+    this.npc('otis', 'Otis', 5550, 18, 18, 0, 92, [
       'Largest teapot in the valley. Smallest washing-up team.',
       'The ridge is just up the road. Take your time. It has been there for ages.',
       'We tried a giant biscuit. The birds had other plans.',

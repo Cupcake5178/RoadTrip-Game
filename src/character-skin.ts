@@ -65,6 +65,8 @@ export function skinCharacter(root: T.Group, animated: T.Object3D[]) {
   root.updateMatrixWorld(true);
   mesh.bind(new T.Skeleton(allBones));
   mesh.computeBoundingSphere();
+  // The little bodies can stretch their arms well past the resting silhouette.
+  mesh.boundingSphere!.radius += 0.65;
   pieces.forEach((piece) => piece.dispose());
   return bones;
 }

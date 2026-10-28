@@ -6,10 +6,33 @@
 
 An original, family-friendly 3D road-trip adventure with a third-person walking camera and optional first-person view. This repository contains a playable single-player vertical slice, **The Mountain Weekend**, built with TypeScript, Three.js, Vite, and Rapier. All art is generated from original compound geometry; sound effects and the quiet road-trip radio are synthesized locally. No remote art, music, game server, API key, or account is required.
 
+## The 0.2.1 character rebuild
+
+The four travelers have been rebuilt around giant spherical colored heads, dot/oval eyes, tiny mouths, little bean bodies, chunky tube arms, mitten hands, very short legs, and oversized boots. There are no noses, ears, hair meshes, or realistic facial features. The supplied reference guided the proportions; the models, palettes, faces, and accessories are original Road Trip designs.
+
+![Wren, June, Milo and Nia — rebuilt expedition cast](docs/characters-front.png)
+
+| Traveler      | Head     | Shirt     | Boots     | Backpack      | Hat                  |
+| ------------- | -------- | --------- | --------- | ------------- | -------------------- |
+| Wren · player | Mint     | Coral     | Yellow    | Violet        | Tiny cream trail cap |
+| June          | Lilac    | Sunflower | Coral red | Teal          | Little bobble hat    |
+| Milo          | Sky blue | Raspberry | Orange    | Golden yellow | Tiny bucket hat      |
+| Nia           | Apricot  | Teal      | Violet    | Lime          | Backward navy cap    |
+
+Wren is the on-foot player; June, Milo, and Nia keep their existing companion roles. Roadside people use the same new design language. The old human-shaped models and first-person flesh-colored hands have been replaced. Existing trips and resources are retained.
+
+Heads are about 1.77 times the torso width and more than twice its height; the spherical head diameter is over 55% of the whole standing character's height, including the hat. Backpacks form a broad, attached rounded shape behind the body. See the [back view](docs/characters-back.png), [black silhouette check](docs/characters-silhouettes.png), and [actual gameplay camera](docs/weekend.png).
+
+The gameplay captures also include the [front view](docs/characters-gameplay-front.png) and [maximum walking-camera distance](docs/characters-gameplay-distance.png).
+
+Animation adds floppy arm follow-through, big boot kicks, head wobble, leaning, squash on landing, and stretchy reaching around the oversized head. Hands retain their round mitten shape while arms stretch. The player and traveler colliders have been sized to the new heads, and carried objects sit at the new hand height. Small-step climbing, jumping, carrying, seating, and vehicle entry/exit retain their existing controls. Hanging/reaching poses are available to the animator; this character pass adds no new climbing mechanics.
+
+To regenerate the front, back, silhouette, running, and reaching review images, start the development server and run `npm run review:characters` in another terminal. This uses the same character geometry and animator as the game. The browser character test checks the four identities, running and jumping, front/rear/distant camera views, and the larger head's clearance at a wall.
+
 ## The 0.2 polish update
 
 - Responsive menus and a HUD with separate spaces for objectives, resources, passengers, interaction prompts, and notifications. Menus scroll inside the screen; gameplay overlays hide while browsing them.
-- Original short, rounded trail characters with expressive faces, different skin tones, jackets, hats, hair, and backpacks. Articulated procedural animation covers walking, running, jumping, landing, small steps, stumbling, carrying, sitting, and getting into and out of the wagon.
+- Articulated procedural character animation covers walking, running, jumping, landing, small steps, stumbling, carrying, sitting, and getting into and out of the wagon. The current models are the rebuilt 0.2.1 expedition cast shown above.
 - A Rapier capsule controller with gravity, sliding, small-step climbing, and collision against terrain and approximately 3,800 visible-world shapes. Walls, fences, tree trunks, rocks, pumps, tables, signs, parked vehicles, and people are solid. Vehicle exits check for a clear place to stand. Loose supplies, cans, mugs, and souvenirs react to bumps and throws.
 - A collision-aware walking camera with mouse-wheel zoom, an optional first-person view, and a collision-aware driving chase view. Indoors, the camera pulls forward and hides nearby head/backpack geometry.
 - Material-specific footsteps, jump/landing, cloth, impact, pickup/drop/throw, vending, horn, brake, and engine sounds; wind, birds, insects, rain, tires, campfire, and radio share balanced audio buses and a master volume control.
@@ -100,7 +123,7 @@ Saves live in this browser's local storage. There are eight photographs per trip
 - `src/vehicle.ts`: accessible arcade driving, terrain alignment, scenery contacts, fuel, cockpit/chase views, visual suspension/sway, roof cargo, and vehicle problems.
 - `src/world.ts`: road ribbons, colored terrain, instanced vegetation, spatially batched scenery, detailed stops, lighting, weather, and campsite.
 - `src/models.ts`: recognizable compound models, shared materials, signs, the wagon interior, supplies, and an asset registry with a GLTF loader.
-- `src/character.ts` and `src/character-skin.ts`: seeded original character designs, a small bone hierarchy, combined skinned geometry, and procedural animation.
+- `src/character.ts` and `src/character-skin.ts`: four original cast designs and palettes, a small bone hierarchy, combined skinned geometry, and procedural animation.
 - `src/collision.ts`: spatially indexed visible-world shapes, swept collision queries, and scenery contact resolution.
 - `src/physics.ts`: Rapier terrain/static collision, the capsule character controller, vehicle/NPC bodies, and dynamic dropped/thrown supplies.
 - `src/follow-camera.ts`: swept shoulder-camera placement, zoom, and smoothing around obstructions.
@@ -116,13 +139,13 @@ The asset registry exposes `loadAsset()` for original `.glb` / `.gltf` replaceme
 
 ## Validation
 
-The 23 unit tests cover cargo capacity, repacking exploits, fuel pricing, budgets, passenger resources, discovery uniqueness, deterministic events, reward idempotency, replay progression, save round-trips, corrupt/unavailable storage, and continuous road/stop geometry. They also check thin and rotated obstacle collision, vertical clearance, camera corner sweeps, actual Rapier walking/jumping and thrown-object contacts, safe vehicle exit clearance, and reproducible character proportions.
+The 24 unit tests cover cargo capacity, repacking exploits, fuel pricing, budgets, passenger resources, discovery uniqueness, deterministic events, reward idempotency, replay progression, save round-trips, corrupt/unavailable storage, and continuous road/stop geometry. They also check thin and rotated obstacle collision, vertical clearance, camera corner sweeps, actual Rapier walking/jumping and thrown-object contacts, safe vehicle exit clearance, dramatically oversized spherical heads, small bodies, four color identities, and reaching hands clearing the head without stretching their mitten shape.
 
-The 12 Chromium browser tests use actual keyboard interactions to pick up and pack supplies, enter and drive the wagon, solve vehicle problems with and without supplies, pay for fuel, buy supplies, take WebGL photographs, choose a route, pitch/light/cook/sleep at camp, visit an attraction, complete the trip, reload saved progress, and replay. Additional checks cover settings, dropped cargo, reset, all 14 menu states and a busy HUD at **1920×1080, 1600×900, and 1366×768**, walking/jumping against representative world obstacles, trunk/rock clearance while sliding around them, throwing, conversations, vending, seating, indoor camera collision, safe exits when parked beside a wall, and generated audio output/muting. Keyboard sliders and braking feedback have regression checks.
+The 14 Chromium browser tests use actual keyboard interactions to pick up and pack supplies, enter and drive the wagon, solve vehicle problems with and without supplies, pay for fuel, buy supplies, take WebGL photographs, choose a route, pitch/light/cook/sleep at camp, visit an attraction, complete the trip, reload saved progress, and replay. Additional checks cover settings, dropped cargo, reset, all 14 menu states and a busy HUD at **1920×1080, 1600×900, and 1366×768**, walking/jumping against representative world obstacles, trunk/rock clearance while sliding around them, throwing, conversations, vending, seating, indoor camera collision, safe exits when parked beside a wall, generated audio output/muting, the rebuilt characters from the actual third-person camera, and moving companions clearing the view while they step out. Keyboard sliders and braking feedback have regression checks.
 
 The development-only `?test` travel harness shortens long drives and aims the camera; it does not grant supplies, fix problems, or complete trips. It is excluded from production builds. Layout screenshots are also inspected visually. Tests use software-rendered Chromium in the cloud, so they demonstrate functionality rather than a gaming-PC frame-rate benchmark. Distant scenery is culled by spatial groups and test scenes enforce draw/triangle budgets. These checks do not establish that every possible contact across the whole map is flawless.
 
-The representative low-quality home scene used 231 draw calls and approximately 153,000 rendered triangles at each tested resolution. This is a scene-complexity measurement, not a frame-rate promise. The standalone ZIP is also checked separately: production test hooks are absent, the game makes no external resource requests, and a captured photograph survives saving and reloading.
+Each articulated character is combined into one skinned mesh: the four-character review scene uses four draw calls and approximately 34,650 triangles. This is a scene-complexity measurement, not a frame-rate promise. The standalone ZIP is also checked separately: production test hooks are absent, the game makes no external resource requests, and a captured photograph survives saving and reloading.
 
 The production build's largest chunk contains Rapier's embedded WebAssembly. It is self-contained and needs no separate WASM host. Vite's default large-chunk warning is expected for this dependency.
 

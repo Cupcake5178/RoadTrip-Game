@@ -1,5 +1,6 @@
 import { ITEMS, cargoCapacity, cargoUsed, type Save, type ItemId, loadSave } from './state';
 import { biome, clamp, nextStop, ROUTE_LENGTH, STOPS } from './route';
+import { EXPEDITION_CAST } from './character';
 
 export type Panel =
   | 'home'
@@ -120,7 +121,7 @@ export class UI {
   }
   home(save: Save) {
     const existing = loadSave();
-    return `<div class="menu-brand"><span class="brand-symbol">${icon('mountain')}</span><span>A LITTLE WAGON. A LONG WEEKEND.</span></div><div class="home-content"><div class="edition"><span></span> A SMALL ADVENTURE IN A VERY BIG WORLD</div><h1>ROAD<br><span>TRIP</span><i>Take the long way.</i></h1><p>Good company. Questionable directions.<br>A mountain weekend to remember.</p><div class="home-actions">${button(existing && !existing.trip.completed ? 'continue' : 'new', `${existing && !existing.trip.completed ? 'Continue your trip' : 'Let’s hit the road'} ${icon('arrow')}`, 'primary large')}${button('new', 'New trip', 'quiet', !existing)}${button('settings', 'Settings', 'quiet')}${button('help', 'How to play', 'quiet')}</div><div class="route-ticket"><div class="ticket-stamp">${icon('mountain')}</div><div><span class="eyebrow">YOUR FIRST ADVENTURE</span><h3>The Mountain Weekend</h3><p>Maple Hollow ${icon('arrow')} Sunrise Ridge</p></div><div class="ticket-meta">7 stops<br><span>Infinite little detours</span></div></div></div><div class="home-footer"><span>MADE FOR WANDERING</span><span>Single player · Keyboard & mouse · Headphones recommended</span><span>v0.2 / MOUNTAIN EDITION</span></div><div class="scene-caption"><i></i> Somewhere between here<br><strong>and a really good story.</strong></div>${save.completed ? `<div class="career-chip">${save.completed} weekend${save.completed > 1 ? 's' : ''} remembered · ${money(save.career)} travel rewards</div>` : ''}`;
+    return `<div class="menu-brand"><span class="brand-symbol">${icon('mountain')}</span><span>A LITTLE WAGON. A LONG WEEKEND.</span></div><div class="home-content"><div class="edition"><span></span> A SMALL ADVENTURE IN A VERY BIG WORLD</div><h1>ROAD<br><span>TRIP</span><i>Take the long way.</i></h1><p>Good company. Questionable directions.<br>A mountain weekend to remember.</p><div class="home-actions">${button(existing && !existing.trip.completed ? 'continue' : 'new', `${existing && !existing.trip.completed ? 'Continue your trip' : 'Let’s hit the road'} ${icon('arrow')}`, 'primary large')}${button('new', 'New trip', 'quiet', !existing)}${button('settings', 'Settings', 'quiet')}${button('help', 'How to play', 'quiet')}</div><div class="route-ticket"><div class="ticket-stamp">${icon('mountain')}</div><div><span class="eyebrow">YOUR FIRST ADVENTURE</span><h3>The Mountain Weekend</h3><p>Maple Hollow ${icon('arrow')} Sunrise Ridge</p></div><div class="ticket-meta">7 stops<br><span>Infinite little detours</span></div></div></div><div class="home-footer"><span>MADE FOR WANDERING</span><span>Single player · Keyboard & mouse · Headphones recommended</span><span>v0.2.1 / EXPEDITION CAST</span></div><div class="scene-caption"><i></i> Somewhere between here<br><strong>and a really good story.</strong></div>${save.completed ? `<div class="career-chip">${save.completed} weekend${save.completed > 1 ? 's' : ''} remembered · ${money(save.career)} travel rewards</div>` : ''}`;
   }
   content(panel: Panel, s: Save): string {
     const head = (eyebrow: string, title: string, desc = '') =>
@@ -270,7 +271,7 @@ export class UI {
     passengers.innerHTML = s.passengers
       .map(
         (p) =>
-          `<div class="passenger-chip"><span style="background:${p.color}">${p.name[0]}</span><div><strong>${p.name}</strong><small>${p.hunger > 70 ? 'Could use a snack' : p.energy < 30 ? 'Ready for a rest' : p.mood > 70 ? 'Loving the long way' : p.mood > 40 ? 'Along for the ride' : 'Needs a little cheering up'}</small></div></div>`,
+          `<div class="passenger-chip"><span style="background:${EXPEDITION_CAST.find((c) => c.name === p.name)?.head ?? p.color}">${p.name[0]}</span><div><strong>${p.name}</strong><small>${p.hunger > 70 ? 'Could use a snack' : p.energy < 30 ? 'Ready for a rest' : p.mood > 70 ? 'Loving the long way' : p.mood > 40 ? 'Along for the ride' : 'Needs a little cheering up'}</small></div></div>`,
       )
       .join('');
     byId('problem-banner').hidden = !s.trip.problem;

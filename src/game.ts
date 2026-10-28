@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { AudioSystem } from './audio';
-import { createCharacter, animateCharacter } from './character';
+import { createCharacter, animateCharacter, EXPEDITION_CAST, CHARACTER_BODY } from './character';
 import { FollowCamera } from './follow-camera';
 import { Input } from './input';
 import { box, sphere } from './models';
@@ -60,7 +60,7 @@ export class Game {
   footstep = 0;
   holding: ItemId | null = null;
   holdingProp: string | null = null;
-  avatar = createCharacter(this.save.trip.seed);
+  avatar = createCharacter(this.save.trip.seed, 0);
   followCamera = new FollowCamera();
   thirdPerson = this.save.settings.thirdPerson ?? true;
   velocity = new T.Vector3();
@@ -142,13 +142,19 @@ export class Game {
     this.world.scene.add(this.camera);
     this.world.scene.add(this.avatar);
     for (const side of [-1, 1]) {
-      const hand = sphere(this.hands, 0.095, [side * 0.32, -0.53, -0.78], '#dcad87', 1);
+      const hand = sphere(
+        this.hands,
+        0.12,
+        [side * 0.32, -0.53, -0.78],
+        EXPEDITION_CAST[0].head,
+        2,
+      );
       hand.scale.z = 1.35;
       const sleeve = box(
         this.hands,
         [0.15, 0.16, 0.45],
         [side * 0.33, -0.63, -0.5],
-        '#7e9d89',
+        EXPEDITION_CAST[0].shirt,
         0.07,
       );
       sleeve.rotation.x = -0.2;
@@ -197,6 +203,17 @@ export class Game {
                 thirdPerson: this.thirdPerson,
                 grounded: this.grounded,
                 avatar: this.avatar.userData.appearance,
+                party: this.vehicle.model.passengers.map((p) => p.userData.appearance),
+                companionHeads: this.vehicle.model.passengers.map((p) =>
+                  p.userData.rig.head.getWorldPosition(new T.Vector3()),
+                ),
+                avatarYaw: this.avatar.rotation.y,
+                avatarVisible: this.avatar.visible,
+                avatarPose: {
+                  lean: this.avatar.userData.rig.torso.rotation.x,
+                  arms: this.avatar.userData.rig.arms.map((a: T.Object3D) => a.rotation.x),
+                  legs: this.avatar.userData.rig.legs.map((a: T.Object3D) => a.rotation.x),
+                },
                 camera: this.camera.position,
                 cameraObstructed: this.followCamera.obstruction,
                 cameraClearance: this.world.collision.sweep(
@@ -341,7 +358,7 @@ export class Game {
     if (this.save.completed > 0) this.save.trip.seed |= 1;
     this.random = seeded(this.save.trip.seed);
     this.avatar.removeFromParent();
-    this.avatar = createCharacter(this.save.trip.seed);
+    this.avatar = createCharacter(this.save.trip.seed, 0);
     this.world.scene.add(this.avatar);
     this.vehicle.paint(this.save.vehicle.paint);
     this.vehicle.sync(this.save);
@@ -1140,7 +1157,7 @@ export class Game {
         origin,
         target.position,
         0.015,
-        carTarget ? 'vehicle' : undefined,
+        carTarget ? 'vehicle' : target.id.startsWith('npc:') ? target.id : undefined,
       );
       if (fraction < 0.85 && fraction * distance < distance - 0.45) continue;
       const value = dot - distance * 0.045 + (target.id === 'trunk' && this.holding ? 0.05 : 0);
@@ -1473,8 +1490,8 @@ export class Game {
     }
     obj.position.set(
       this.thirdPerson ? 0 : 0.42,
-      this.thirdPerson ? 0.99 : -0.55,
-      this.thirdPerson ? -0.51 : -0.9,
+      this.thirdPerson ? 0.76 : -0.55,
+      this.thirdPerson ? -0.62 : -0.9,
     );
     obj.rotation.set(0.1, this.thirdPerson ? 0 : -0.3, 0.06);
     obj.scale.setScalar(0.75);
@@ -1490,8 +1507,8 @@ export class Game {
       if (p.root.visible)
         this.world.collision.dynamic.set(`npc:${id}`, {
           id: `npc:${id}`,
-          center: p.root.position.clone().add(new T.Vector3(0, 0.8, 0)),
-          half: new T.Vector3(0.32, 0.8, 0.32),
+          center: p.root.position.clone().add(new T.Vector3(0, 0.88, 0)),
+          half: new T.Vector3(CHARACTER_BODY.radius, 0.88, CHARACTER_BODY.radius),
           rotation: new T.Quaternion(),
           kind: 'cylinder',
           surface: 'grass',
@@ -1524,11 +1541,12 @@ export class Game {
       });
       const position = person.getWorldPosition(new T.Vector3());
       this.physics.syncNPC(`companion:${i}`, position, out && speed < 0.35);
-      if (out && speed < 0.35)
+      // Camera collision follows the large heads throughout the exit animation.
+      if (out)
         this.world.collision.dynamic.set(`companion:${i}`, {
           id: `companion:${i}`,
-          center: position.clone().add(new T.Vector3(0, 0.8, 0)),
-          half: new T.Vector3(0.32, 0.8, 0.32),
+          center: position.clone().add(new T.Vector3(0, 0.88, 0)),
+          half: new T.Vector3(CHARACTER_BODY.radius, 0.88, CHARACTER_BODY.radius),
           rotation: new T.Quaternion(),
           kind: 'cylinder',
           surface: 'grass',
