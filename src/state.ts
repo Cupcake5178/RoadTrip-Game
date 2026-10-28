@@ -124,6 +124,7 @@ export interface Settings {
   quality: 'low' | 'high';
   fov: number;
   music: boolean;
+  thirdPerson?: boolean;
 }
 export interface Save {
   version: 1;
@@ -159,7 +160,14 @@ export function freshSave(
     upgrades: career?.upgrades ?? [],
     unlocked: career?.unlocked ?? ['Mountain Weekend'],
     journals: career?.journals ?? [],
-    settings: settings ?? { volume: 0.35, sensitivity: 1, quality: 'high', fov: 76, music: true },
+    settings: settings ?? {
+      volume: 0.5,
+      sensitivity: 1,
+      quality: 'high',
+      fov: 76,
+      music: true,
+      thirdPerson: true,
+    },
     vehicle: { x: 9, z: 8, yaw: 0, fuel: 53, condition: 100, paint: '#ce7957' },
     mode: 'walking',
     player: { x: 14, z: 13, yaw: 0.5 },
@@ -173,6 +181,7 @@ export function freshSave(
         mood: 90,
         color: '#7fada2',
       },
+      { name: 'Nia', type: 'the photographer', hunger: 12, energy: 94, mood: 90, color: '#a48ca9' },
     ],
     trip: {
       seed: Math.floor(Math.random() * 1000000),
@@ -322,6 +331,15 @@ export function loadSave(): Save | null {
     )
       return null;
     s.trip.provisioned ??= [...s.trip.packed];
+    if (s.passengers.length === 2)
+      s.passengers.push({
+        name: 'Nia',
+        type: 'the photographer',
+        hunger: 12,
+        energy: 94,
+        mood: 90,
+        color: '#a48ca9',
+      });
     return s as Save;
   } catch {
     return null;

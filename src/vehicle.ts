@@ -120,7 +120,22 @@ export class Vehicle {
     v.yaw += (this.steer * this.speed * 0.047 * dt) / (1 + Math.abs(this.speed) * 0.018);
     const nx = v.x - Math.sin(v.yaw) * this.speed * dt,
       nz = v.z - Math.cos(v.yaw) * this.speed * dt;
-    const corrected = this.world.collide(nx, nz, 1.1);
+    const start = new T.Vector3(v.x, terrainHeight(v.x, v.z) + 1.1, v.z);
+    const target = new T.Vector3(nx, terrainHeight(nx, nz) + 1.1, nz);
+    for (let pass = 0; pass < 2; pass++)
+      for (const side of [-1, 1]) {
+        const offset = new T.Vector3(Math.sin(v.yaw) * 1.3 * side, 0, Math.cos(v.yaw) * 1.3 * side);
+        const end = this.world.collision.moveCircle(
+          start.clone().add(offset),
+          target.clone().add(offset),
+          1.05,
+          0.75,
+          'vehicle',
+        );
+        target.x = end.x - offset.x;
+        target.z = end.z - offset.z;
+      }
+    const corrected = { x: target.x, z: target.z };
     if (
       Math.hypot(corrected.x - nx, corrected.z - nz) > 0.05 &&
       Math.abs(this.speed) > 2 &&

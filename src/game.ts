@@ -1,5 +1,7 @@
 import * as T from 'three';
 import { AudioSystem } from './audio';
+import { createCharacter, animateCharacter } from './character';
+import { FollowCamera } from './follow-camera';
 import { Input } from './input';
 import { box, sphere } from './models';
 import { Physics } from './physics';
@@ -45,7 +47,7 @@ export class Game {
   audio = new AudioSystem();
   input: Input;
   renderer: T.WebGLRenderer;
-  camera = new T.PerspectiveCamera(76, innerWidth / innerHeight, 0.075, 1700);
+  camera = new T.PerspectiveCamera(76, innerWidth / innerHeight, 0.075, 1000);
   world = new World();
   physics = new Physics();
   vehicle: Vehicle;
@@ -57,6 +59,23 @@ export class Game {
   walkTime = 0;
   footstep = 0;
   holding: ItemId | null = null;
+  holdingProp: string | null = null;
+  avatar = createCharacter(this.save.trip.seed);
+  followCamera = new FollowCamera();
+  thirdPerson = this.save.settings.thirdPerson ?? true;
+  velocity = new T.Vector3();
+  grounded = true;
+  actionMotion = 0;
+  landingMotion = 0;
+  stumbleMotion = 0;
+  movingSpeed = 0;
+  turnMotion = 0;
+  climbMotion = 0;
+  seated: { position: T.Vector3; yaw: number } | null = null;
+  transition = 0;
+  entryStart = new T.Vector3();
+  exitTransition = 0;
+  roofMugAttached = true;
   hands = new T.Group();
   highlighted: T.Object3D | null = null;
   photoMode = false;
@@ -100,6 +119,8 @@ export class Game {
         });
       }
     };
+    this.physics.onImpact = (id, strength) =>
+      this.audio.noise(0.09, Math.min(0.12, strength * 0.015), id.startsWith('prop:') ? 1200 : 500);
     this.ui.onAction = (action, value) => this.action(action, value);
     window.addEventListener('resize', () => {
       this.renderer.setSize(innerWidth, innerHeight);
@@ -119,6 +140,7 @@ export class Game {
       if (this.photoMode && !this.ui.panel) this.takePhoto();
     });
     this.world.scene.add(this.camera);
+    this.world.scene.add(this.avatar);
     for (const side of [-1, 1]) {
       const hand = sphere(this.hands, 0.095, [side * 0.32, -0.53, -0.78], '#dcad87', 1);
       hand.scale.z = 1.35;
@@ -172,6 +194,23 @@ export class Game {
                 handMeshes: this.hands.children.length,
                 drawCalls: this.renderer.info.render.calls,
                 triangles: this.renderer.info.render.triangles,
+                thirdPerson: this.thirdPerson,
+                grounded: this.grounded,
+                avatar: this.avatar.userData.appearance,
+                camera: this.camera.position,
+                cameraObstructed: this.followCamera.obstruction,
+                cameraClearance: this.world.collision.sweep(
+                  this.position.clone().add(new T.Vector3(0, 1.5, 0)),
+                  this.camera.position,
+                  0.22,
+                ),
+                colliders: this.world.collision.obstacles.length,
+                holdingProp: this.holdingProp,
+                audio: this.audio.ctx?.state,
+                audioEvents: this.audio.events,
+                audioLevel: this.audio.meter(),
+                bodies: this.physics.bodies.size,
+                seated: !!this.seated,
               }),
             ),
           warp: (x: number, z: number, drive = false) => {
@@ -183,12 +222,19 @@ export class Game {
               this.save.vehicle.yaw = roadHeading(-z);
               this.vehicle.sync(this.save);
             } else {
-              this.position.set(x, terrainHeight(x, z), z);
+              this.position.set(x, this.world.walkingHeight(x, z) + 0.14, z);
               this.jumpY = this.jumpVelocity = 0;
+              this.velocity.set(0, 0, 0);
+              this.transition = this.exitTransition = 0;
+              this.followCamera.reset();
             }
           },
           aim: (x: number, y: number, z: number) => {
-            const d = new T.Vector3(x, y, z).sub(this.camera.position);
+            const d = new T.Vector3(x, y, z).sub(
+              this.save.mode === 'walking'
+                ? this.position.clone().add(new T.Vector3(0, 1.5, 0))
+                : this.camera.position,
+            );
             this.yaw = Math.atan2(-d.x, -d.z);
             this.pitch = Math.asin(clamp(d.y / d.length(), -1, 1));
           },
@@ -200,17 +246,37 @@ export class Game {
           advance: (seconds: number) => {
             this.save.trip.elapsed += seconds;
           },
+          panel: (panel: Panel) => this.show(panel),
+          messages: () => {
+            this.ui.dialogue(
+              'June',
+              'A map, a snack, a very long sentence about the lovely scenery ahead.',
+            );
+            this.ui.toast('A little discovery. A lot of possibilities.');
+            this.save.trip.problem = 'cargo';
+          },
+          obstacles: () =>
+            this.world.collision.obstacles.map((o) => ({
+              id: o.id,
+              center: o.center,
+              half: o.half,
+              kind: o.kind,
+            })),
         },
       });
     }
   }
   resetPosition() {
     const p = this.save.player;
-    this.position.set(p.x, terrainHeight(p.x, p.z), p.z);
+    this.position.set(p.x, this.world.walkingHeight(p.x, p.z) + 0.14, p.z);
     this.yaw = p.yaw;
     this.pitch = -0.1;
+    this.velocity.set(0, 0, 0);
+    this.followCamera.reset();
+    this.avatar.position.copy(this.position);
   }
   resetItems() {
+    this.transition = this.exitTransition = 0;
     this.physics.reset();
     let i = 0;
     for (const [id, obj] of this.world.itemObjects) {
@@ -222,11 +288,27 @@ export class Game {
       if (obj.visible) {
         const x = 16 + (i % 4) * 1.6,
           z = 3 + Math.floor(i / 4) * 2.3;
-        obj.position.set(x, terrainHeight(x, z), z);
+        obj.position.set(x, this.world.walkingHeight(x, z) + 0.12, z);
+        this.physics.drop(id, obj, obj.position.clone());
       }
       i++;
     }
     this.holding = null;
+    this.holdingProp = null;
+    this.seated = null;
+    for (const [id, obj] of this.world.life.props) {
+      obj.removeFromParent();
+      this.world.scene.add(obj);
+      obj.scale.setScalar(1);
+      obj.visible = true;
+      this.physics.drop(id, obj, obj.userData.home.clone().add(new T.Vector3(0, 0.1, 0)));
+      if (id === 'prop:roof-mug') {
+        this.physics.remove(id);
+        this.vehicle.model.root.add(obj);
+        obj.position.set(0.62, 2.56, 1.1);
+        this.roofMugAttached = true;
+      }
+    }
   }
   applySettings() {
     this.camera.fov = this.save.settings.fov;
@@ -236,10 +318,12 @@ export class Game {
     );
     this.renderer.shadowMap.enabled = this.save.settings.quality === 'high';
     this.world.sun.castShadow = this.save.settings.quality === 'high';
+    this.thirdPerson = this.save.settings.thirdPerson ?? true;
   }
   show(panel: Panel, remember = true) {
     this.hold = null;
     if (panel) {
+      this.photoMode = false;
       this.input.unlock();
       this.input.clear();
       if (remember && panel !== this.ui.panel) this.panelHistory.push(this.ui.panel);
@@ -256,6 +340,9 @@ export class Game {
     this.save = freshSave(this.save.settings, this.save);
     if (this.save.completed > 0) this.save.trip.seed |= 1;
     this.random = seeded(this.save.trip.seed);
+    this.avatar.removeFromParent();
+    this.avatar = createCharacter(this.save.trip.seed);
+    this.world.scene.add(this.avatar);
     this.vehicle.paint(this.save.vehicle.paint);
     this.vehicle.sync(this.save);
     this.vehicle.doorOpen = false;
@@ -282,6 +369,7 @@ export class Game {
     }
   }
   action(action: string, value?: string) {
+    this.audio.start();
     this.audio.feedback('click');
     const [kind, id] = action.split(':');
     switch (kind) {
@@ -344,6 +432,10 @@ export class Game {
         if (id === 'sensitivity') this.save.settings.sensitivity = clamp(Number(value), 0.3, 2);
         if (id === 'fov') this.save.settings.fov = clamp(Number(value), 60, 95);
         if (id === 'music') this.save.settings.music = value === 'true';
+        if (id === 'thirdPerson') {
+          this.save.settings.thirdPerson = value === 'true';
+          this.followCamera.reset();
+        }
         this.applySettings();
         this.persist();
         const output = this.ui.overlay
@@ -565,7 +657,7 @@ export class Game {
     this.resume();
   }
   pickup(id: ItemId) {
-    if (this.holding) {
+    if (this.holding || this.holdingProp) {
       this.ui.toast('Two hands. One thing at a time. Q puts it down.');
       return;
     }
@@ -578,23 +670,91 @@ export class Game {
     obj.rotation.set(0.1, -0.3, 0.1);
     obj.scale.setScalar(0.8);
     obj.visible = true;
+    this.actionMotion = 1;
+    this.updateCarryPose();
     this.audio.feedback('pick');
     this.ui.toast(`${ITEMS[id].name} · ${ITEMS[id].hint}`);
   }
-  drop() {
+  drop(throwing = false) {
+    if (this.holdingProp) {
+      const id = this.holdingProp,
+        obj = this.world.physicsObjects.get(id)!;
+      const direction = new T.Vector3(-Math.sin(this.yaw), 0.18, -Math.cos(this.yaw));
+      const pos = this.position
+        .clone()
+        .add(new T.Vector3(0, 1.1, 0))
+        .addScaledVector(direction, 0.9);
+      obj.removeFromParent();
+      this.world.scene.add(obj);
+      obj.scale.setScalar(1);
+      this.physics.drop(
+        id,
+        obj,
+        this.safeRelease(pos),
+        direction.multiplyScalar(throwing ? 8.5 : 1.3),
+      );
+      this.holdingProp = null;
+      this.audio.feedback(throwing ? 'throw' : 'drop');
+      this.actionMotion = 1;
+      return;
+    }
     if (!this.holding) return;
     const id = this.holding,
       obj = this.world.itemObjects.get(id)!;
-    const pos = this.camera.localToWorld(new T.Vector3(0, -0.4, -1.2));
+    const pos = this.position
+      .clone()
+      .add(new T.Vector3(-Math.sin(this.yaw) * 0.9, 1.1, -Math.cos(this.yaw) * 0.9));
     obj.removeFromParent();
     this.world.scene.add(obj);
     obj.scale.setScalar(1);
-    const direction = this.camera.getWorldDirection(new T.Vector3()).multiplyScalar(1.7);
-    this.physics.drop(id, obj, pos, direction);
+    const direction = new T.Vector3(-Math.sin(this.yaw), 0.15, -Math.cos(this.yaw)).multiplyScalar(
+      throwing ? 8.5 : 1.3,
+    );
+    this.physics.drop(id, obj, this.safeRelease(pos), direction);
+    this.actionMotion = 1;
     this.holding = null;
-    this.audio.feedback('door');
+    this.audio.feedback(throwing ? 'throw' : 'drop');
+  }
+  spillCargo() {
+    const bag = this.save.trip.packed.includes('bag');
+    const id = bag ? 'bag' : 'prop:roof-mug';
+    if (!bag && !this.roofMugAttached) return;
+    if (bag) this.save.trip.packed.splice(this.save.trip.packed.indexOf('bag'), 1);
+    else this.roofMugAttached = false;
+    const object = this.world.physicsObjects.get(id)!;
+    object.removeFromParent();
+    this.world.scene.add(object);
+    object.scale.setScalar(1);
+    object.visible = true;
+    this.physics.drop(
+      id,
+      object,
+      this.vehicle.local(1.2, 2.8, 0.9),
+      new T.Vector3(
+        2 - Math.sin(this.save.vehicle.yaw) * this.vehicle.speed * 0.7,
+        1,
+        -Math.cos(this.save.vehicle.yaw) * this.vehicle.speed * 0.7,
+      ),
+    );
+    this.save.trip.moments.push({
+      text: bag
+        ? 'The weekend bag briefly tried travelling independently.'
+        : 'The roof mug requested a scenic stop. With a little bouncing.',
+      at: this.save.trip.elapsed,
+    });
+    this.ui.dialogue(
+      'Nia',
+      bag ? 'The socks are taking the scenic route!' : 'Your travel mug is living up to its name.',
+    );
+    this.audio.feedback('drop');
+  }
+  safeRelease(desired: T.Vector3) {
+    const origin = this.position.clone().add(new T.Vector3(0, 1.1, 0));
+    return origin.lerp(desired, this.world.collision.sweep(origin, desired, 0.35));
   }
   startHold(duration: number, complete: () => void) {
+    this.audio.feedback('repair');
+    this.actionMotion = 1;
     if (this.target) this.hold = { target: this.target.id, elapsed: 0, duration, complete };
   }
   fixProblem() {
@@ -619,12 +779,56 @@ export class Game {
   interact() {
     if (!this.target) return;
     const id = this.target.id;
+    this.actionMotion = 1;
+    if (id.startsWith('junk:')) {
+      if (this.holding || this.holdingProp) {
+        this.ui.toast('One treasure at a time. Q puts it down. G gives it a little flight.');
+        return;
+      }
+      const prop = id.slice(5),
+        object = this.world.physicsObjects.get(prop)!;
+      this.physics.remove(prop);
+      this.holdingProp = prop;
+      if (prop === 'prop:roof-mug') this.roofMugAttached = false;
+      this.updateCarryPose();
+      this.audio.feedback('pick');
+      return;
+    }
+    if (id.startsWith('npc:')) {
+      const line = this.world.life.talk(id.slice(4));
+      this.ui.dialogue(line.name, line.text);
+      this.save.passengers.forEach((p) => (p.mood = Math.min(100, p.mood + 3)));
+      this.audio.feedback('cloth');
+      return;
+    }
+    if (id.startsWith('seat:')) {
+      const seat = this.world.life.seats.get(id.slice(5))!;
+      this.seated = seat;
+      this.velocity.set(0, 0, 0);
+      this.position.copy(seat.position);
+      this.save.passengers.forEach((p) => (p.energy = Math.min(100, p.energy + 8)));
+      this.audio.feedback('cloth');
+      this.ui.toast('A good view. A moment to do absolutely nothing. E to stand.');
+      return;
+    }
+    if (id.startsWith('vending:')) {
+      if (!spend(this.save, 3)) {
+        this.ui.toast('The machine accepts coins, not optimistic speeches.');
+        this.audio.feedback('bad');
+        return;
+      }
+      this.save.trip.snacks += 2;
+      this.audio.feedback('vending');
+      this.ui.toast('Two trail treats. One very dramatic clunk.');
+      this.persist();
+      return;
+    }
     if (id.startsWith('item:')) {
       this.pickup(this.target.data as ItemId);
       return;
     }
     if (id === 'door') {
-      if (this.holding) {
+      if (this.holding || this.holdingProp) {
         this.ui.toast('Pack that in the trunk, or press Q to put it down.');
         return;
       }
@@ -633,10 +837,14 @@ export class Game {
         this.audio.feedback('door');
         return;
       }
+      this.entryStart.copy(this.position);
+      this.transition = 0.65;
       this.save.mode = 'driving';
       this.vehicle.doorOpen = this.vehicle.trunkOpen = this.vehicle.hoodOpen = false;
       this.yaw = 0;
       this.pitch = -0.015;
+      this.followCamera.reset();
+      this.actionMotion = 1;
       this.audio.feedback('door');
       this.persist();
       if (!this.save.trip.departed)
@@ -834,6 +1042,13 @@ export class Game {
   }
   allTargets() {
     const targets = this.world.targets.filter((t) => {
+      if (t.id.startsWith('junk:')) {
+        const prop = t.data!,
+          obj = this.world.physicsObjects.get(prop)!;
+        if (this.holdingProp === prop || !obj.visible) return false;
+        t.position.copy(obj.getWorldPosition(new T.Vector3())).add(new T.Vector3(0, 0.2, 0));
+        return true;
+      }
       if (!t.id.startsWith('item:')) return true;
       const id = t.data as ItemId,
         obj = this.world.itemObjects.get(id)!;
@@ -906,15 +1121,28 @@ export class Game {
     return targets;
   }
   chooseTarget() {
-    const direction = this.camera.getWorldDirection(new T.Vector3());
+    const origin = this.position.clone().add(new T.Vector3(0, 1.5, 0));
+    const direction = new T.Vector3(
+      -Math.sin(this.yaw) * Math.cos(this.pitch),
+      Math.sin(this.pitch),
+      -Math.cos(this.yaw) * Math.cos(this.pitch),
+    );
     let score = -Infinity;
     this.target = null;
     for (const target of this.allTargets()) {
-      const delta = target.position.clone().sub(this.camera.position),
+      const delta = target.position.clone().sub(origin),
         distance = delta.length();
       if (distance > target.radius || distance < 0.05) continue;
       const dot = delta.normalize().dot(direction);
       if (dot < (distance < 1.1 ? 0.25 : 0.78)) continue;
+      const carTarget = ['door', 'trunk', 'roof', 'hood', 'tire'].includes(target.id);
+      const fraction = this.world.collision.sweep(
+        origin,
+        target.position,
+        0.015,
+        carTarget ? 'vehicle' : undefined,
+      );
+      if (fraction < 0.85 && fraction * distance < distance - 0.45) continue;
       const value = dot - distance * 0.045 + (target.id === 'trunk' && this.holding ? 0.05 : 0);
       if (value > score) {
         score = value;
@@ -923,6 +1151,10 @@ export class Game {
     }
     this.targetText = this.target?.title || '';
     this.targetHint = this.target?.hint || '';
+    if (this.seated) {
+      this.targetText = 'Stand up & stretch';
+      this.targetHint = 'E · the road will still be there';
+    }
     if (this.target?.id.startsWith('item:')) {
       const item = ITEMS[this.target.data as ItemId];
       this.targetText = `Pick up ${item.name.toLowerCase()}`;
@@ -947,6 +1179,7 @@ export class Game {
     }
   }
   takePhoto() {
+    this.followCamera.reset();
     if (this.save.trip.photos.length >= 8) {
       this.ui.toast('Eight moments in this little album. Leave a few for next time.');
       this.photoMode = false;
@@ -1015,7 +1248,10 @@ export class Game {
           : eventKind(this.save);
       trip.problem = kind;
       trip.repairStep = 0;
-      if (kind === 'cargo') trip.roofSecured = false;
+      if (kind === 'cargo') {
+        trip.roofSecured = false;
+        this.spillCargo();
+      }
       trip.eventIndex++;
       trip.eventAt = s + 1400 + this.random() * 500;
       this.audio.feedback('bad');
@@ -1073,55 +1309,281 @@ export class Game {
       this.ui.toast('Fuel getting low. A pump, a fuel can, or R for a ranger.');
   }
   walk(dt: number) {
-    const move = new T.Vector3(
-      Number(this.input.down('KeyD', 'ArrowRight')) - Number(this.input.down('KeyA', 'ArrowLeft')),
+    const input = this.input;
+    const axis = new T.Vector3(
+      Number(input.down('KeyD', 'ArrowRight')) - Number(input.down('KeyA', 'ArrowLeft')),
       0,
-      Number(this.input.down('KeyS', 'ArrowDown')) - Number(this.input.down('KeyW', 'ArrowUp')),
+      Number(input.down('KeyS', 'ArrowDown')) - Number(input.down('KeyW', 'ArrowUp')),
     );
-    const moving = move.lengthSq() > 0;
-    if (moving) {
-      const speed = this.input.down('ShiftLeft', 'ShiftRight') ? 6.5 : 3.8;
-      move
-        .normalize()
-        .applyAxisAngle(new T.Vector3(0, 1, 0), this.yaw)
-        .multiplyScalar(speed * dt);
-      let { x, z } = this.world.collide(this.position.x + move.x, this.position.z + move.z, 0.32);
-      // The wagon is solid even while walking around its open doors.
-      const local = this.vehicle.model.root.worldToLocal(
-        new T.Vector3(x, this.vehicle.model.root.position.y, z),
-      );
-      if (Math.abs(local.x) < 1.36 && Math.abs(local.z) < 2.65) {
-        if (1.36 - Math.abs(local.x) < 2.65 - Math.abs(local.z))
-          local.x = Math.sign(local.x || 1) * 1.36;
-        else local.z = Math.sign(local.z || 1) * 2.65;
-        const p = this.vehicle.model.root.localToWorld(local);
-        x = p.x;
-        z = p.z;
+    if (this.exitTransition > 0) axis.set(0, 0, 0);
+    const running = input.down('ShiftLeft', 'ShiftRight') && !this.holding && !this.holdingProp;
+    if (this.seated && (axis.lengthSq() || input.hit('Space'))) this.standUp();
+    if (this.seated) {
+      this.physics.player.setEnabled(false);
+      this.position.copy(this.seated.position);
+      this.avatar.rotation.y = this.seated.yaw;
+      this.movingSpeed = 0;
+    } else {
+      const desired = axis.lengthSq()
+        ? axis
+            .normalize()
+            .applyAxisAngle(new T.Vector3(0, 1, 0), this.yaw)
+            .multiplyScalar(running ? 6.3 : 3.6)
+        : axis;
+      this.velocity.x = T.MathUtils.damp(this.velocity.x, desired.x, 12, dt);
+      this.velocity.z = T.MathUtils.damp(this.velocity.z, desired.z, 12, dt);
+      if (this.grounded && this.jumpVelocity < 0) this.jumpVelocity = -0.8;
+      if (input.hit('Space') && this.grounded) {
+        this.jumpVelocity = 5.2;
+        this.grounded = false;
+        this.audio.feedback('jump');
       }
-      this.position.x = clamp(x, roadX(-z) - 210, roadX(-z) + 210);
-      this.position.z = clamp(z, -7370, 110);
-      this.walkTime += dt * (speed > 4 ? 11 : 7);
-      this.footstep += dt;
-      if (this.footstep > (speed > 4 ? 0.3 : 0.46) && this.jumpY === 0) {
+      this.jumpVelocity = Math.max(-18, this.jumpVelocity - dt * 15);
+      const before = this.position.clone();
+      const result = this.physics.movePlayer(
+        this.position,
+        new T.Vector3(this.velocity.x * dt, this.jumpVelocity * dt, this.velocity.z * dt),
+      );
+      this.position.copy(result.position);
+      if (result.grounded && result.position.y - before.y > 0.07) {
+        this.climbMotion = 0.4;
+        this.audio.feedback('cloth');
+      }
+      const landed = !this.grounded && result.grounded;
+      this.grounded = result.grounded;
+      if (landed) {
+        this.landingMotion = Math.min(1, Math.abs(this.jumpVelocity) / 7);
+        this.audio.feedback('land');
+        this.jumpVelocity = -0.8;
+      }
+      this.movingSpeed =
+        Math.hypot(this.position.x - before.x, this.position.z - before.z) / Math.max(dt, 0.001);
+      if (result.collisions > 0 && running && this.movingSpeed < 1 && this.stumbleMotion <= 0) {
+        this.stumbleMotion = 1;
+        this.audio.feedback('bump');
+      }
+      if (
+        this.position.y < terrainHeight(this.position.x, this.position.z) - 3 ||
+        Math.abs(this.position.x) > 470 ||
+        this.position.z < -7475 ||
+        this.position.z > 275
+      ) {
+        this.position.copy(before);
+        this.position.y = Math.max(before.y, this.world.walkingHeight(before.x, before.z) + 0.2);
+        this.jumpVelocity = 0;
+      }
+      this.walkTime += dt * (running ? 11 : 7);
+      this.footstep += this.movingSpeed * dt;
+      if (this.footstep > (running ? 1.9 : 1.6) && this.grounded) {
         this.footstep = 0;
-        this.audio.feedback('step');
+        this.audio.step(
+          this.world.surfaceAt(this.position.x, this.position.z, this.position.y),
+          running,
+        );
+      }
+      if (this.movingSpeed > 0.15) {
+        const direction = Math.atan2(-(this.position.x - before.x), -(this.position.z - before.z));
+        const turn =
+          T.MathUtils.euclideanModulo(direction - this.avatar.rotation.y + Math.PI, Math.PI * 2) -
+          Math.PI;
+        this.turnMotion = clamp(turn, -1, 1);
+        this.avatar.rotation.y += turn * (1 - Math.exp(-dt * 13));
       }
     }
-    if (this.input.hit('Space') && this.jumpY === 0) this.jumpVelocity = 4.6;
-    this.jumpVelocity -= dt * 13;
-    this.jumpY = Math.max(0, this.jumpY + this.jumpVelocity * dt);
-    if (this.jumpY === 0) this.jumpVelocity = 0;
-    this.position.y = this.world.walkingHeight(this.position.x, this.position.z);
-    const bob = moving && !this.photoMode ? Math.sin(this.walkTime) * 0.025 : 0;
-    this.camera.position.copy(this.position).add(new T.Vector3(0, 1.7 + this.jumpY + bob, 0));
-    this.camera.quaternion.setFromEuler(new T.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+    this.avatar.position.copy(this.position);
+    this.avatar.visible = this.thirdPerson && !this.photoMode;
+    if (this.exitTransition > 0) {
+      const t = 1 - this.exitTransition / 0.5;
+      this.avatar.position.lerpVectors(this.entryStart, this.position, t * t * (3 - 2 * t));
+      this.exitTransition = Math.max(0, this.exitTransition - dt);
+    }
+    animateCharacter(this.avatar, this.totalTime, dt, {
+      speed: this.movingSpeed,
+      running,
+      grounded: this.grounded,
+      vertical: this.jumpVelocity,
+      carrying: !!this.holding || !!this.holdingProp,
+      seated: !!this.seated,
+      action: this.actionMotion,
+      landing: this.landingMotion,
+      stumble: this.stumbleMotion,
+      climbing: this.climbMotion > 0,
+      turn: this.turnMotion,
+    });
+    this.climbMotion = Math.max(0, this.climbMotion - dt);
+    this.turnMotion *= Math.exp(-dt * 6);
+    this.actionMotion = Math.max(0, this.actionMotion - dt * 2);
+    this.landingMotion = Math.max(0, this.landingMotion - dt * 4);
+    this.stumbleMotion = Math.max(0, this.stumbleMotion - dt * 0.8);
+    this.jumpY = Math.max(
+      0,
+      this.position.y - this.world.walkingHeight(this.position.x, this.position.z),
+    );
+    const head = this.position.clone().add(new T.Vector3(0, 1.5, 0));
+    if (this.thirdPerson && !this.photoMode)
+      this.followCamera.update(
+        this.camera,
+        head,
+        this.yaw,
+        Math.max(-0.65, Math.min(0.8, this.pitch)),
+        dt,
+        this.world.collision,
+        (x, z) => this.world.walkingHeight(x, z),
+      );
+    else {
+      this.camera.position.copy(head);
+      this.camera.quaternion.setFromEuler(
+        new T.Euler(
+          this.pitch,
+          this.yaw,
+          Math.sin(this.stumbleMotion * 12) * this.stumbleMotion * 0.035,
+          'YXZ',
+        ),
+      );
+    }
+    const rig = this.avatar.userData.rig;
+    if (rig) {
+      const distance = this.camera.position.distanceTo(head);
+      rig.head.scale.setScalar(distance > 1 ? 1 : 0.001);
+      rig.backpack.scale.setScalar(distance > 0.7 ? 1 : 0.001);
+    }
+    this.updateCarryPose();
+  }
+  standUp() {
+    if (!this.seated) return;
+    this.position
+      .copy(this.seated.position)
+      .add(new T.Vector3(Math.sin(this.seated.yaw) * 1.3, 0, Math.cos(this.seated.yaw) * 1.3));
+    this.position.y = this.world.walkingHeight(this.position.x, this.position.z) + 0.18;
+    this.seated = null;
+    this.followCamera.reset();
+    this.audio.feedback('cloth');
+  }
+  updateCarryPose() {
+    const obj = this.holding
+      ? this.world.itemObjects.get(this.holding)
+      : this.holdingProp
+        ? this.world.physicsObjects.get(this.holdingProp)
+        : null;
+    if (!obj) return;
+    const parent = this.thirdPerson ? this.avatar : this.camera;
+    if (obj.parent !== parent) {
+      obj.removeFromParent();
+      parent.add(obj);
+    }
+    obj.position.set(
+      this.thirdPerson ? 0 : 0.42,
+      this.thirdPerson ? 0.99 : -0.55,
+      this.thirdPerson ? -0.51 : -0.9,
+    );
+    obj.rotation.set(0.1, this.thirdPerson ? 0 : -0.3, 0.06);
+    obj.scale.setScalar(0.75);
+    obj.updateWorldMatrix(true, false);
+    const desired = obj.getWorldPosition(new T.Vector3());
+    const safe = this.safeRelease(desired);
+    obj.position.copy(parent.worldToLocal(safe));
+  }
+  updateCompanions(dt: number) {
+    const out = this.save.mode === 'walking';
+    for (const [id, p] of this.world.life.people) {
+      this.physics.syncNPC(id, p.root.position, p.root.visible);
+      if (p.root.visible)
+        this.world.collision.dynamic.set(`npc:${id}`, {
+          id: `npc:${id}`,
+          center: p.root.position.clone().add(new T.Vector3(0, 0.8, 0)),
+          half: new T.Vector3(0.32, 0.8, 0.32),
+          rotation: new T.Quaternion(),
+          kind: 'cylinder',
+          surface: 'grass',
+        });
+      else this.world.collision.dynamic.delete(`npc:${id}`);
+    }
+    this.physics.syncNPC('deer', this.world.life.deer.position, this.world.life.deer.visible);
+
+    this.vehicle.model.passengers.forEach((person, i) => {
+      const seat = new T.Vector3(i === 1 ? -0.5 : 0.5, 0.83, i === 0 ? 0 : 1.1);
+      const outside = new T.Vector3(i === 1 ? -3.1 : 3.1, 0, i === 1 ? 3.8 : (i - 1) * 1.9);
+      if (out) {
+        const world = this.vehicle.local(outside.x, 0, outside.z);
+        outside.y = this.world.walkingHeight(world.x, world.z) - this.vehicle.model.root.position.y;
+      }
+      const goal = out ? outside : seat;
+      const speed = person.position.distanceTo(goal) * 3;
+      person.position.lerp(goal, 1 - Math.exp(-dt * 3));
+      person.rotation.y = T.MathUtils.damp(
+        person.rotation.y,
+        out ? Math.sin(this.totalTime * 0.3 + i) * 0.35 : 0,
+        3,
+        dt,
+      );
+      person.scale.setScalar(out ? 1 : 0.78);
+      animateCharacter(person, this.totalTime + i, dt, {
+        speed: out ? speed : 0,
+        seated: !out,
+        grounded: true,
+      });
+      const position = person.getWorldPosition(new T.Vector3());
+      this.physics.syncNPC(`companion:${i}`, position, out && speed < 0.35);
+      if (out && speed < 0.35)
+        this.world.collision.dynamic.set(`companion:${i}`, {
+          id: `companion:${i}`,
+          center: position.clone().add(new T.Vector3(0, 0.8, 0)),
+          half: new T.Vector3(0.32, 0.8, 0.32),
+          rotation: new T.Quaternion(),
+          kind: 'cylinder',
+          surface: 'grass',
+        });
+      else this.world.collision.dynamic.delete(`companion:${i}`);
+    });
   }
   driveCamera(dt: number) {
     const v = this.vehicle;
+    this.avatar.visible = false;
+    this.physics.player.setEnabled(false);
+    if (this.transition > 0) {
+      this.transition = Math.max(0, this.transition - dt);
+      const t = 1 - this.transition / 0.65;
+      this.avatar.visible = true;
+      this.avatar.position.lerpVectors(
+        this.entryStart,
+        v.local(-0.5, 0.86, 0),
+        t * t * (3 - 2 * t),
+      );
+      this.avatar.rotation.y = this.save.vehicle.yaw;
+      animateCharacter(this.avatar, this.totalTime, dt, { seated: t > 0.4, action: 1 - t });
+      this.followCamera.update(
+        this.camera,
+        v.local(-0.5, 1.3, 0),
+        this.save.vehicle.yaw + 0.7,
+        -0.1,
+        dt,
+        this.world.collision,
+        (x, z) => this.world.walkingHeight(x, z),
+        4.2,
+        'vehicle',
+      );
+      if (!this.chase && t > 0.6) {
+        this.camera.position.lerp(v.local(-0.5, 1.86, 0.14), (t - 0.6) / 0.4);
+        this.camera.quaternion.slerp(
+          new T.Quaternion().setFromEuler(new T.Euler(this.pitch, this.save.vehicle.yaw, 0, 'YXZ')),
+          (t - 0.6) / 0.4,
+        );
+      }
+      this.position.copy(v.model.root.position);
+      return;
+    }
     if (this.chase) {
-      const desired = v.local(0, 5, 9);
-      this.camera.position.lerp(desired, 1 - Math.exp(-dt * 6));
-      this.camera.lookAt(v.local(0, 1.5, -6));
+      this.followCamera.update(
+        this.camera,
+        v.local(0, 1.5, 0),
+        this.save.vehicle.yaw + this.yaw,
+        -0.22,
+        dt,
+        this.world.collision,
+        (x, z) => this.world.walkingHeight(x, z),
+        this.followCamera.distance + 3.5,
+        'vehicle',
+      );
     } else {
       this.camera.position.copy(
         v.local(
@@ -1155,6 +1617,14 @@ export class Game {
       return;
     }
     if (this.ui.panel) return;
+    if (i.hit('KeyH')) this.audio.feedback('horn');
+    if (i.hit('KeyV') && this.save.mode === 'walking') {
+      this.thirdPerson = !this.thirdPerson;
+      this.save.settings.thirdPerson = this.thirdPerson;
+      this.followCamera.reset();
+      this.updateCarryPose();
+      this.persist();
+    }
     if (i.hit('KeyM')) {
       this.show('map');
       return;
@@ -1182,25 +1652,49 @@ export class Game {
       if (i.hit('KeyV')) {
         this.chase = !this.chase;
         this.yaw = 0;
+        this.followCamera.reset();
       }
       if (i.hit('KeyE')) {
         if (Math.abs(this.vehicle.speed) > 1.2)
           this.ui.toast('A little slower before you hop out.');
         else {
+          const exit = [
+            [-2, -0.15],
+            [2, -0.15],
+            [-1.8, 3.1],
+            [1.8, 3.1],
+          ]
+            .map(([x, z]) => {
+              const point = this.vehicle.local(x, 0, z);
+              point.y = this.world.walkingHeight(point.x, point.z) + 0.06;
+              return point;
+            })
+            .find((point) => this.physics.canStandAt(point));
+          if (!exit) {
+            this.ui.toast('A tight squeeze. Move the wagon a little before getting out.');
+            return;
+          }
           this.vehicle.speed = 0;
+          this.entryStart.copy(this.vehicle.local(-0.5, 0.86, 0));
+          this.exitTransition = 0.5;
           this.save.mode = 'walking';
           this.vehicle.doorOpen = true;
-          this.position.copy(this.vehicle.local(-2, 0, -0.15));
-          this.position.y = terrainHeight(this.position.x, this.position.z);
+          this.position.copy(exit);
           this.yaw = this.save.vehicle.yaw;
           this.pitch = -0.1;
+          this.followCamera.reset();
+          this.actionMotion = 1;
           this.audio.feedback('door');
           this.persist();
         }
       }
     } else {
+      if (i.hit('KeyG')) this.drop(true);
       if (i.hit('KeyQ')) this.drop();
-      if (i.hit('KeyE') && !this.photoMode) this.interact();
+      if (i.hit('KeyE') && !this.photoMode) {
+        if (this.seated) this.standUp();
+        else this.interact();
+      }
     }
   }
   lastDelta = 0.016;
@@ -1212,17 +1706,58 @@ export class Game {
     this.handleKeys();
     const paused = !!this.ui.panel;
     if (!paused) {
+      this.followCamera.distance = clamp(
+        this.followCamera.distance + this.input.wheel * 0.3,
+        2.2,
+        6.5,
+      );
       this.yaw -= this.input.mouseX * 0.002 * this.save.settings.sensitivity;
       this.pitch = clamp(
         this.pitch - this.input.mouseY * 0.002 * this.save.settings.sensitivity,
         -1.35,
         1.25,
       );
-      this.vehicle.update(dt, this.save, this.input, this.save.mode === 'driving');
+      this.vehicle.update(
+        dt,
+        this.save,
+        this.input,
+        this.save.mode === 'driving' && this.transition <= 0,
+      );
+      if (
+        !this.save.trip.roofSecured &&
+        this.vehicle.speed > 9 &&
+        Math.abs(this.vehicle.steer) > 0.6 &&
+        this.roofMugAttached
+      )
+        this.spillCargo();
+      this.physics.syncVehicle(this.vehicle.model.root);
+      this.physics.syncTent(this.world.campTent, this.save.trip.campStage >= 1);
+      if (this.save.trip.campStage >= 1)
+        this.world.collision.dynamic.set('camp-tent', {
+          id: 'camp-tent',
+          center: this.world.campTent.position.clone().add(new T.Vector3(0, 1, 0)),
+          half: new T.Vector3(1.7, 1, 2),
+          rotation: new T.Quaternion(),
+          kind: 'box',
+          surface: 'wood',
+        });
+      else this.world.collision.dynamic.delete('camp-tent');
+      this.world.collision.dynamic.set('vehicle', {
+        id: 'vehicle',
+        center: this.vehicle.local(0, 1.15, 0),
+        half: new T.Vector3(1.16, 0.76, 2.4),
+        rotation: this.vehicle.model.root.quaternion.clone(),
+        kind: 'box',
+        surface: 'metal',
+      });
+      this.updateCompanions(dt);
       if (this.save.mode === 'walking') this.walk(dt);
       else this.driveCamera(dt);
-      this.hands.visible = !!this.holding && this.save.mode === 'walking';
-      this.physics.update(dt, this.world.itemObjects);
+      this.hands.visible =
+        (!!this.holding || !!this.holdingProp) && this.save.mode === 'walking' && !this.thirdPerson;
+      this.physics.update(dt, this.world.physicsObjects);
+      for (const id of this.save.trip.packed)
+        if (this.physics.bodies.has(id)) this.physics.remove(id);
       if (this.save.mode === 'walking') this.chooseTarget();
       else {
         this.target = null;
@@ -1260,6 +1795,16 @@ export class Game {
       this.save.trip.weather,
       this.save.settings,
       paused,
+      {
+        surface: this.world.surfaceAt(this.position.x, this.position.z),
+        forest: -this.position.z > 650 && -this.position.z < 5000,
+        night:
+          (this.save.trip.elapsed / 65 + (this.save.trip.seed % 2 ? 15 : 10)) % 24 > 19 ||
+          (this.save.trip.elapsed / 65 + (this.save.trip.seed % 2 ? 15 : 10)) % 24 < 6,
+        camp: Math.abs(this.position.z + 4300) < 80 && this.save.trip.campStage >= 2,
+        gas: Math.abs(this.position.z + 1100) < 65,
+      },
+      dt,
     );
     this.uiTime += dt;
     if (this.uiTime > 0.09) {
@@ -1274,6 +1819,7 @@ export class Game {
         this.hold ? this.hold.elapsed / this.hold.duration : 0,
         this.vehicle.headlights,
         this.photoMode,
+        this.holdingProp,
       );
     }
     this.renderer.render(this.world.scene, this.camera);

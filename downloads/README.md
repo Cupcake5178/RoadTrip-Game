@@ -6,7 +6,9 @@
 2. Open **RoadTrip.html** in a recent desktop Chrome, Edge, or Firefox browser.
 3. Click **Let's hit the road**.
 
-No terminal, Node.js, or npm is needed to play. Use a keyboard and mouse; **WASD** moves/drives, **E** interacts, and **P** pauses. See **How to Play** on the title screen for the full controls.
+No terminal, Node.js, or npm is needed to play. Use a keyboard and mouse; **WASD** moves/drives, **E** interacts, **Space** jumps, **G** throws, **V** changes view, **H** honks, and **P** pauses. Scroll to adjust the third-person camera. See **How to Play** on the title screen for the full controls.
+
+Version 0.2 includes the redesigned characters, third-person camera, solid world collision, physical props, expanded sound, responsive menus, travelers, vending, and resting benches. Your three travel friends are AI companions; this version is single player.
 
 All game code, styles, physics, art, and audio are self-contained. Saves stay in your browser; moving the HTML file may change where your browser looks for its save. The game warns if local storage is unavailable. Managed browsers may block local HTML; the source development server is the fallback.
 

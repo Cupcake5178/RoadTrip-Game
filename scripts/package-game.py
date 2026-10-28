@@ -11,7 +11,7 @@ if not html.is_file():
 output = root / "downloads" / "RoadTrip-playable.zip"
 output.parent.mkdir(exist_ok=True)
 temporary = output.with_suffix(".zip.tmp")
-instructions = """ROAD TRIP — THE MOUNTAIN WEEKEND
+instructions = """ROAD TRIP — THE MOUNTAIN WEEKEND / v0.2
 
 1. Extract this ZIP into a normal folder.
 2. Open RoadTrip.html in a recent desktop Chrome, Edge, or Firefox browser.
@@ -19,6 +19,9 @@ instructions = """ROAD TRIP — THE MOUNTAIN WEEKEND
 
 You do not need Node.js, Python, npm, an account, or an internet connection to play.
 Use a keyboard and mouse. WASD moves/drives, E interacts, P pauses, C takes photos.
+Space jumps (handbrake in the car), Q drops, G throws, H honks, V changes view.
+Scroll to adjust the third-person camera. Meet travelers, try the vending machines,
+or use E at a bench to rest; move or press E to stand.
 The title screen's How to Play button has the complete field guide.
 
 Your browser stores saves and photos locally. Keep RoadTrip.html in the same folder

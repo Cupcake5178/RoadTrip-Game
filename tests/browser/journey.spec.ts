@@ -94,6 +94,12 @@ test('a complete weekend: physical packing, driving, repairs, fuel, decisions, c
   expect(Math.abs(driven.carBodyWorld.x - driven.save.vehicle.x)).toBeLessThan(0.08);
   expect(Math.abs(driven.carBodyWorld.z - driven.save.vehicle.z)).toBeLessThan(0.08);
   expect(driven.handMeshes).toBe(4);
+  const brakes = driven.audioEvents.brake ?? 0;
+  await page.keyboard.down('Space');
+  await expect
+    .poll(async () => (await snapshot(page)).audioEvents.brake ?? 0)
+    .toBeGreaterThan(brakes);
+  await page.keyboard.up('Space');
   await page.screenshot({ path: 'test-results/driving.png' });
   // The travel harness only shortens travel, and the event still triggers through the game loop.
   await page.evaluate(() => {

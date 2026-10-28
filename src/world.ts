@@ -1,4 +1,6 @@
 import * as T from 'three';
+import { CollisionIndex, obstacleFromMesh, type Surface } from './collision';
+import { RoadsideLife } from './roadside-life';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   assetRegistry,
@@ -49,6 +51,8 @@ export class World {
   scene = new T.Scene();
   targets: Target[] = [];
   solids: Solid[] = [];
+  collision = new CollisionIndex();
+  physicsObjects = new Map<string, T.Group>();
   ground!: T.Mesh<T.BufferGeometry>;
   itemObjects = new Map<ItemId, T.Group>();
   sun = new T.DirectionalLight('#ffe2b1', 2.7);
@@ -64,6 +68,7 @@ export class World {
   raccoon = new T.Group();
   clock = 0;
   weatherMix = 0;
+  life: RoadsideLife;
   constructor() {
     this.scene.background = new T.Color('#c9dacf');
     this.scene.fog = new T.Fog('#c9dacf', 110, 760);
@@ -86,6 +91,7 @@ export class World {
     this.buildRoad();
     this.buildNature();
     this.buildStops();
+    this.life = new RoadsideLife(this);
     this.buildRain();
   }
   addTarget(
@@ -111,7 +117,7 @@ export class World {
   }
   buildSky() {
     this.sky = new T.Mesh(
-      new T.SphereGeometry(1000, 32, 20),
+      new T.SphereGeometry(850, 32, 20),
       new T.ShaderMaterial({
         side: T.BackSide,
         depthWrite: false,
@@ -131,7 +137,7 @@ export class World {
     for (let i = 0; i < 600; i++) {
       const v = new T.Vector3(rand() - 0.5, rand() * 0.65 + 0.15, rand() - 0.5)
         .normalize()
-        .multiplyScalar(1200);
+        .multiplyScalar(800);
       verts.push(v.x, v.y, v.z);
     }
     const geo = new T.BufferGeometry();
@@ -224,6 +230,7 @@ export class World {
     const m = mesh(geo, color);
     m.receiveShadow = true;
     m.castShadow = false;
+    m.userData.noCollision = true;
     this.scene.add(m);
     return m;
   }
@@ -273,6 +280,10 @@ export class World {
       count * 2,
     );
     const rocks = new T.InstancedMesh(new T.IcosahedronGeometry(1, 0), material('#acb2a0'), 550);
+    trunks.userData.collidable = true;
+    trunks.name = 'tree trunks';
+    rocks.userData.collidable = true;
+    rocks.name = 'large rocks';
     for (const obj of [trunks, leaves, rocks]) {
       obj.castShadow = true;
       obj.receiveShadow = true;
@@ -639,7 +650,7 @@ export class World {
     this.place(pitch, cx + 33, cz - 5);
     this.addTarget(
       'camp',
-      roadPoint(camp.s + 5, 33).add(new T.Vector3(0, 1, 0)),
+      roadPoint(camp.s + 5, 33).add(new T.Vector3(0, 1, 2.6)),
       'Make yourself at home',
       4.2,
     );
@@ -779,6 +790,42 @@ export class World {
     this.rain.visible = false;
     this.scene.add(this.rain);
   }
+  chunkInstances() {
+    // Frustum-cull short stretches of road instead of drawing every tree in the region.
+    for (const object of [...this.scene.children]) {
+      if (!(object instanceof T.InstancedMesh)) continue;
+      const bands = new Map<number, number[]>(),
+        matrix = new T.Matrix4(),
+        position = new T.Vector3();
+      for (let i = 0; i < object.count; i++) {
+        object.getMatrixAt(i, matrix);
+        position.setFromMatrixPosition(matrix);
+        const key = Math.floor(position.z / 220);
+        if (!bands.has(key)) bands.set(key, []);
+        bands.get(key)!.push(i);
+      }
+      for (const indices of bands.values()) {
+        const chunk = new T.InstancedMesh(object.geometry, object.material, indices.length);
+        chunk.castShadow = object.castShadow;
+        chunk.receiveShadow = object.receiveShadow;
+        chunk.position.copy(object.position);
+        chunk.quaternion.copy(object.quaternion);
+        chunk.scale.copy(object.scale);
+        const color = new T.Color();
+        indices.forEach((source, index) => {
+          object.getMatrixAt(source, matrix);
+          chunk.setMatrixAt(index, matrix);
+          if (object.instanceColor) {
+            object.getColorAt(source, color);
+            chunk.setColorAt(index, color);
+          }
+        });
+        chunk.computeBoundingSphere();
+        this.scene.add(chunk);
+      }
+      object.removeFromParent();
+    }
+  }
   batchStatic() {
     // Spatial batches keep hand-built roadside detail without thousands of draw calls.
     const excluded = new Set<T.Object3D>([
@@ -854,10 +901,86 @@ export class World {
       root.clear();
       root.add(visual);
     }
+    this.collectCollision();
+    for (const person of this.life.people.values())
+      person.root.position.y = this.walkingHeight(person.root.position.x, person.root.position.z);
+    this.chunkInstances();
     this.batchStatic();
+  }
+  collectCollision() {
+    this.collision = new CollisionIndex();
+    this.scene.updateMatrixWorld(true);
+    const excluded = new Set<T.Object3D>([
+      this.sky,
+      this.lake,
+      this.ground,
+      this.stars,
+      this.rain,
+      this.campTent,
+      this.fire,
+      this.raccoon,
+      ...this.itemObjects.values(),
+    ]);
+    const visit = (obj: T.Object3D) => {
+      if (
+        excluded.has(obj) ||
+        obj instanceof T.Camera ||
+        obj.userData.dynamic ||
+        obj.userData.noCollision
+      )
+        return;
+      if (obj instanceof T.InstancedMesh) {
+        if (!obj.userData.collidable) return;
+        const local = new T.Matrix4();
+        for (let i = 0; i < obj.count; i++) {
+          obj.getMatrixAt(i, local);
+          const obstacle = obstacleFromMesh(
+            obj,
+            obj.matrixWorld.clone().multiply(local),
+            `${obj.name}:${i}`,
+          );
+          if (obstacle) {
+            obstacle.surface = obj.name === 'tree trunks' ? 'wood' : 'gravel';
+            this.collision.add(obstacle);
+          }
+        }
+        return;
+      }
+      if (obj instanceof T.Mesh && obj.visible && obj.geometry.type !== 'TubeGeometry') {
+        const obstacle = obstacleFromMesh(obj);
+        if (obstacle && obstacle.half.length() < 75) this.collision.add(obstacle);
+      }
+      obj.children.forEach(visit);
+    };
+    this.scene.children.forEach(visit);
+    for (const [id, obj] of this.itemObjects) this.physicsObjects.set(id, obj);
+  }
+  surfaceAt(x: number, z: number, y?: number): Surface {
+    if (y !== undefined)
+      for (const o of this.collision.query(x, z, 0.3))
+        if (
+          Math.abs(o.center.y + o.half.y - y) < 0.15 &&
+          Math.abs(x - o.center.x) < o.half.x &&
+          Math.abs(z - o.center.z) < o.half.z
+        )
+          return o.surface;
+    if (
+      (Math.abs(z + 2250) < 9 && Math.abs(x - roadX(2250) + 35) < 9) ||
+      (Math.abs(z + 7140) < 13 && Math.abs(x - roadX(7140) + 38) < 10)
+    )
+      return 'wood';
+    if (Math.abs(x - roadX(-z)) < 5) return 'road';
+    if (
+      STOPS.some(
+        (stop) => Math.abs(z + stop.s) < 35 && Math.abs(x - roadX(stop.s) - stop.side * 23) < 24,
+      )
+    )
+      return 'gravel';
+    return 'grass';
   }
   update(dt: number, position: T.Vector3, save: Save) {
     this.clock += dt;
+    this.life.update(this.clock, dt, position);
     const cycle = (save.trip.elapsed / 65 + (save.trip.seed % 2 ? 15 : 10)) % 24;
     const daylight = clamp(Math.sin(((cycle - 6) / 24) * Math.PI * 2) * 2 + 0.15, 0, 1);
     const sunset = (1 - Math.abs(daylight - 0.45) * 2) * Number(cycle > 16 || cycle < 8);
@@ -914,16 +1037,9 @@ export class World {
     }
   }
   collide(x: number, z: number, radius: number) {
-    for (const s of this.solids) {
-      const dx = x - s.x,
-        dz = z - s.z;
-      if (Math.abs(dx) >= s.hx + radius || Math.abs(dz) >= s.hz + radius) continue;
-      const px = s.hx + radius - Math.abs(dx),
-        pz = s.hz + radius - Math.abs(dz);
-      if (px < pz) x += Math.sign(dx || 1) * px;
-      else z += Math.sign(dz || 1) * pz;
-    }
-    return { x, z };
+    const p = new T.Vector3(x, terrainHeight(x, z) + 1.1, z);
+    const result = this.collision.moveCircle(p, p, radius, 0.75, 'vehicle');
+    return { x: result.x, z: result.z };
   }
   walkingHeight(x: number, z: number) {
     let y = terrainHeight(x, z);
@@ -931,6 +1047,17 @@ export class World {
       y = Math.max(y, roadY(2250) + 0.46);
     if (Math.abs(x - (roadX(7140) - 38)) < 8.7 && Math.abs(z + 7140) < 11)
       y = Math.max(y, roadY(7140) + 0.3);
+    for (const obstacle of this.collision.query(x, z, 0.1)) {
+      if (obstacle.half.y > 0.2 || Math.min(obstacle.half.x, obstacle.half.z) < 0.5) continue;
+      const top = obstacle.center.y + obstacle.half.y;
+      if (
+        top > y &&
+        top < y + 0.65 &&
+        Math.abs(x - obstacle.center.x) < obstacle.half.x &&
+        Math.abs(z - obstacle.center.z) < obstacle.half.z
+      )
+        y = top;
+    }
     return y;
   }
 }

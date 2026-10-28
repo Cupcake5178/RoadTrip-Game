@@ -76,11 +76,14 @@ export class UI {
         <div class="hud-bottom"><div><div id="passengers"></div><div class="vehicle-hud glass"><div class="speed"><strong id="speed">0</strong><span id="speed-unit">KM/H</span></div><div class="gauges"><div><span>${icon('fuel')} FUEL <b id="fuel-value"></b></span><i><em id="fuel-bar"></em></i></div><div><span>${icon('tool')} WAGON <b id="condition-value"></b></span><i><em id="condition-bar"></em></i></div></div></div><div class="mode-label" id="mode-label"></div></div>
         <div class="route-peek glass"><div><span class="eyebrow">THE ROAD AHEAD</span><button data-action="map" aria-label="Open route map">M ${icon('map')}</button></div><svg viewBox="0 0 190 55" class="mini-route"><path d="M8 44C40 44 25 9 66 13S100 54 126 30 160 7 183 10"/><path id="route-progress" d="M8 44C40 44 25 9 66 13S100 54 126 30 160 7 183 10"/><circle id="map-car" r="5" cx="8" cy="44"/></svg><strong id="next-stop"></strong><small id="remaining"></small></div></div>
         <div id="interaction" hidden></div><div class="key-hints" id="key-hints"></div><div id="capture-flash"></div>
-      </div><div id="toast" role="status" hidden></div><div id="overlay"></div>`;
+      </div><div id="status-rail"><div id="toast" role="status" hidden></div></div><div id="overlay"></div>`;
     this.hud = document.getElementById('hud')!;
     this.overlay = document.getElementById('overlay')!;
     this.toastElement = document.getElementById('toast')!;
     this.dialogueElement = document.getElementById('dialogue')!;
+    document
+      .getElementById('status-rail')!
+      .prepend(document.getElementById('problem-banner')!, this.dialogueElement);
     this.root.addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
       if (el && !el.hasAttribute('disabled')) this.onAction(el.dataset.action!);
@@ -103,7 +106,8 @@ export class UI {
   }
   show(panel: Panel, save: Save) {
     this.panel = panel;
-    this.hud.hidden = panel === 'home' || panel === 'intro';
+    this.hud.hidden = !!panel;
+    this.root.dataset.panel = panel ?? 'playing';
     this.overlay.className = panel ? `overlay ${panel === 'home' ? 'home-overlay' : ''}` : '';
     if (!panel) {
       this.overlay.innerHTML = '';
@@ -116,13 +120,13 @@ export class UI {
   }
   home(save: Save) {
     const existing = loadSave();
-    return `<div class="menu-brand"><span class="brand-symbol">${icon('mountain')}</span><span>A LITTLE WAGON. A LONG WEEKEND.</span></div><div class="home-content"><div class="edition"><span></span> A SMALL ADVENTURE IN A VERY BIG WORLD</div><h1>ROAD<br><span>TRIP</span><i>Take the long way.</i></h1><p>Good company. Questionable directions.<br>A mountain weekend to remember.</p><div class="home-actions">${button(existing && !existing.trip.completed ? 'continue' : 'new', `${existing && !existing.trip.completed ? 'Continue your trip' : 'Let’s hit the road'} ${icon('arrow')}`, 'primary large')}${button('new', 'New trip', 'quiet', !existing)}${button('settings', 'Settings', 'quiet')}${button('help', 'How to play', 'quiet')}</div><div class="route-ticket"><div class="ticket-stamp">${icon('mountain')}</div><div><span class="eyebrow">YOUR FIRST ADVENTURE</span><h3>The Mountain Weekend</h3><p>Maple Hollow ${icon('arrow')} Sunrise Ridge</p></div><div class="ticket-meta">7 stops<br><span>Infinite little detours</span></div></div></div><div class="home-footer"><span>MADE FOR WANDERING</span><span>Single player · Keyboard & mouse · Headphones recommended</span><span>v0.1 / MOUNTAIN EDITION</span></div><div class="scene-caption"><i></i> Somewhere between here<br><strong>and a really good story.</strong></div>${save.completed ? `<div class="career-chip">${save.completed} weekend${save.completed > 1 ? 's' : ''} remembered · ${money(save.career)} travel rewards</div>` : ''}`;
+    return `<div class="menu-brand"><span class="brand-symbol">${icon('mountain')}</span><span>A LITTLE WAGON. A LONG WEEKEND.</span></div><div class="home-content"><div class="edition"><span></span> A SMALL ADVENTURE IN A VERY BIG WORLD</div><h1>ROAD<br><span>TRIP</span><i>Take the long way.</i></h1><p>Good company. Questionable directions.<br>A mountain weekend to remember.</p><div class="home-actions">${button(existing && !existing.trip.completed ? 'continue' : 'new', `${existing && !existing.trip.completed ? 'Continue your trip' : 'Let’s hit the road'} ${icon('arrow')}`, 'primary large')}${button('new', 'New trip', 'quiet', !existing)}${button('settings', 'Settings', 'quiet')}${button('help', 'How to play', 'quiet')}</div><div class="route-ticket"><div class="ticket-stamp">${icon('mountain')}</div><div><span class="eyebrow">YOUR FIRST ADVENTURE</span><h3>The Mountain Weekend</h3><p>Maple Hollow ${icon('arrow')} Sunrise Ridge</p></div><div class="ticket-meta">7 stops<br><span>Infinite little detours</span></div></div></div><div class="home-footer"><span>MADE FOR WANDERING</span><span>Single player · Keyboard & mouse · Headphones recommended</span><span>v0.2 / MOUNTAIN EDITION</span></div><div class="scene-caption"><i></i> Somewhere between here<br><strong>and a really good story.</strong></div>${save.completed ? `<div class="career-chip">${save.completed} weekend${save.completed > 1 ? 's' : ''} remembered · ${money(save.career)} travel rewards</div>` : ''}`;
   }
   content(panel: Panel, s: Save): string {
     const head = (eyebrow: string, title: string, desc = '') =>
       `<span class="eyebrow">${eyebrow}</span><h2>${title}</h2>${desc ? `<p class="panel-desc">${desc}</p>` : ''}`;
     if (panel === 'intro')
-      return `${head('A POSTCARD FROM MAPLE HOLLOW', 'The Mountain Weekend', 'Sunrise Ridge is calling. The wagon? Mostly ready. Pick what matters, leave a little room for the unexpected.')}<div class="intro-route">${icon('bag')} Pack ${icon('arrow')} ${icon('road')} Wander ${icon('arrow')} ${icon('mountain')} Arrive</div><div class="note">Walk to a supply and press <kbd>E</kbd> to pick it up. Carry it to the open trunk and press <kbd>E</kbd> to pack. You have <strong>${cargoCapacity(s)} cargo slots</strong> — and eight things that might come in handy.<br><br>Mouse to look · <kbd>W A S D</kbd> to move · <kbd>Shift</kbd> to sprint. Click the world to capture your mouse; <kbd>Esc</kbd> releases it.</div>${button('resume', `Let’s pack ${icon('arrow')}`, 'primary full')}`;
+      return `${head('A POSTCARD FROM MAPLE HOLLOW', 'The Mountain Weekend', 'Sunrise Ridge is calling. The wagon? Mostly ready. Pick what matters, leave a little room for the unexpected.')}<div class="intro-route">${icon('bag')} Pack ${icon('arrow')} ${icon('road')} Wander ${icon('arrow')} ${icon('mountain')} Arrive</div><div class="note">Walk to a supply and press <kbd>E</kbd> to pick it up. Carry it to the open trunk and press <kbd>E</kbd> to pack. You have <strong>${cargoCapacity(s)} cargo slots</strong> — and eight things that might come in handy.<br><br>Mouse to look · <kbd>W A S D</kbd> to move · <kbd>Shift</kbd> to sprint. Press <kbd>V</kbd> to switch first/third person; scroll to zoom. Click the world to capture your mouse; <kbd>Esc</kbd> releases it.</div>${button('resume', `Let’s pack ${icon('arrow')}`, 'primary full')}`;
     if (panel === 'pause')
       return `${head('TAKE A BREATHER', 'No hurry. You’re on a trip.')}<div class="pause-list">${button('resume', `Back to the weekend ${icon('arrow')}`, 'primary')}${button('map', `${icon('map')} Route & discoveries`)}${button('packing', `${icon('bag')} Cargo & supplies`)}${button('journal', `${icon('camera')} The trip journal`)}${button('upgrades', `${icon('tool')} Wagon workshop`)}${button('settings', `${icon('sound')} Settings`)}${button('help', 'Controls & field guide')}${button('recover', 'Roadside assistance · $8 maximum')}${button('home', 'Save & return to title', 'quiet')}</div><p class="fineprint">${this.saveWarning ? 'Storage is full or unavailable. This trip is currently saved in memory only.' : 'Your trip saves automatically. Browser saves stay on this device.'}</p>`;
     if (panel === 'packing')
@@ -134,7 +138,7 @@ export class UI {
     if (panel === 'route')
       return `${head('TWO ROADS. BOTH A STORY.', 'Which way feels right?', 'June has a map. Milo has a feeling. One of them is upside down.')}<div class="route-options"><button class="route-option" data-action="route:highway">${icon('road')}<span class="eyebrow">THE SENSIBLE WAY</span><h3>Stay on the highway</h3><p>Smooth asphalt, easy corners, a happier planner. The steady choice.</p><span>June approves. Mostly.</span></button><button class="route-option" data-action="route:shortcut">${icon('mountain')}<span class="eyebrow">THE SCENIC WAY</span><h3>Pinecone trail</h3><p>A bumpy dirt loop through the pines. Bring secured cargo and a sense of humor.</p><span>Milo is already pointing.</span></button></div>`;
     if (panel === 'settings')
-      return `${head('MAKE YOURSELF COMFORTABLE', 'Your kind of weekend.')}<div class="settings-list"><label>Master volume <output>${Math.round(s.settings.volume * 100)}%</output><input aria-label="Master volume" data-setting="volume" type="range" min="0" max="1" step=".05" value="${s.settings.volume}"></label><label>Mouse sensitivity <output>${s.settings.sensitivity.toFixed(1)}</output><input aria-label="Mouse sensitivity" data-setting="sensitivity" type="range" min=".3" max="2" step=".1" value="${s.settings.sensitivity}"></label><label>Field of view <output>${s.settings.fov}°</output><input aria-label="Field of view" data-setting="fov" type="range" min="60" max="95" step="1" value="${s.settings.fov}"></label><label>Graphics quality<select aria-label="Graphics quality" data-setting="quality"><option value="high" ${s.settings.quality === 'high' ? 'selected' : ''}>High · shadows & crisp scenery</option><option value="low" ${s.settings.quality === 'low' ? 'selected' : ''}>Low · gentler on your laptop</option></select></label><label class="check-setting">Original road-trip radio<input aria-label="Music" type="checkbox" data-setting="music" ${s.settings.music ? 'checked' : ''}></label></div><div class="shop-extras">${button('fullscreen', 'Toggle fullscreen')}${button('reset', 'Reset all saves', 'danger')}</div><p class="fineprint">Desktop keyboard and mouse required. Audio begins after you start playing.</p>`;
+      return `${head('MAKE YOURSELF COMFORTABLE', 'Your kind of weekend.')}<div class="settings-list"><label>Master volume <output>${Math.round(s.settings.volume * 100)}%</output><input aria-label="Master volume" data-setting="volume" type="range" min="0" max="1" step=".05" value="${s.settings.volume}"></label><label>Mouse sensitivity <output>${s.settings.sensitivity.toFixed(1)}</output><input aria-label="Mouse sensitivity" data-setting="sensitivity" type="range" min=".3" max="2" step=".1" value="${s.settings.sensitivity}"></label><label>Field of view <output>${s.settings.fov}°</output><input aria-label="Field of view" data-setting="fov" type="range" min="60" max="95" step="1" value="${s.settings.fov}"></label><label>Graphics quality<select aria-label="Graphics quality" data-setting="quality"><option value="high" ${s.settings.quality === 'high' ? 'selected' : ''}>High · shadows & crisp scenery</option><option value="low" ${s.settings.quality === 'low' ? 'selected' : ''}>Low · gentler on your laptop</option></select></label><label class="check-setting">Third-person walking camera<input aria-label="Third-person walking camera" type="checkbox" data-setting="thirdPerson" ${s.settings.thirdPerson !== false ? 'checked' : ''}></label><label class="check-setting">Original road-trip radio<input aria-label="Music" type="checkbox" data-setting="music" ${s.settings.music ? 'checked' : ''}></label></div><div class="shop-extras">${button('fullscreen', 'Toggle fullscreen')}${button('reset', 'Reset all saves', 'danger')}</div><p class="fineprint">Desktop keyboard and mouse required. Audio begins after you start playing.</p>`;
     if (panel === 'camp')
       return `${head('PINECONE CAMP', 'A little closer to the stars.', s.trip.campStage >= 3 ? 'Morning already? The wagon smells faintly of toasted marshmallows.' : 'Put the road on pause. Your crew could use a little fresh air.')}<div class="camp-steps">${['Pitch the tent', 'Light the contained campfire', 'Cook a little supper', 'Sleep until morning'].map((text, i) => `<div><span class="step-dot ${s.trip.campStage > i ? 'done' : ''}">${s.trip.campStage > i ? '✓' : i + 1}</span>${text}</div>`).join('')}</div>${button('campaction', s.trip.campStage === 0 ? (s.trip.packed.includes('tent') ? 'Pitch your tent' : 'Rent a tent · $12') : s.trip.campStage === 1 ? 'Light the campfire' : s.trip.campStage === 2 ? 'Cook supper · 1 snack or $5' : 'Sleep until morning', 'primary full')}`;
     if (panel === 'journal')
@@ -175,12 +179,12 @@ export class UI {
     if (panel === 'help')
       return `${head('THE GLOVEBOX FIELD GUIDE', 'A few things before you go.')}<div class="controls-grid">${[
         ['W A S D / arrows', 'Walk / drive'],
-        ['Mouse', 'Look around'],
+        ['Mouse / wheel', 'Look around / zoom camera'],
         ['Click world', 'Capture mouse'],
         ['E', 'Interact / enter / exit'],
         ['Shift / Space', 'Sprint / jump (handbrake in car)'],
-        ['Q', 'Drop carried item'],
-        ['F / V', 'Headlights / driving camera'],
+        ['Q / G', 'Drop / throw carried item'],
+        ['F / H / V', 'Headlights / horn / camera view'],
         ['C', 'Camera / take photograph'],
         ['M / Tab', 'Route map / cargo'],
         ['Esc / P', 'Pause / release mouse'],
@@ -206,6 +210,7 @@ export class UI {
     timer: number,
     headlights: boolean,
     photoMode: boolean,
+    holdingProp?: string | null,
   ) {
     const byId = (id: string) => document.getElementById(id)!;
     const pos = clamp(-s.vehicle.z, 0, ROUTE_LENGTH),
@@ -249,7 +254,9 @@ export class UI {
       ? `THE WANDER WAGON · ${headlights ? 'LIGHTS ON' : 'SLOW DAYS AHEAD'}`
       : holding
         ? `CARRYING · ${ITEMS[holding].name.toUpperCase()}`
-        : 'TAKE YOUR TIME. LOOK AROUND.';
+        : holdingProp
+          ? 'CARRYING · ROADSIDE TREASURE'
+          : 'TAKE YOUR TIME. LOOK AROUND.';
     byId('next-stop').textContent = stop.name;
     byId('remaining').textContent =
       `${(Math.max(0, ROUTE_LENGTH - pos) / 1000).toFixed(1)} km to the ridge`;
@@ -280,7 +287,7 @@ export class UI {
       : '';
     byId('key-hints').innerHTML = driving
       ? '<span><kbd>W S</kbd> Go / brake</span><span><kbd>A D</kbd> Steer</span><span><kbd>E</kbd> Get out</span><span><kbd>V</kbd> Camera</span><span><kbd>M</kbd> Map</span>'
-      : `<span><kbd>W A S D</kbd> Walk</span><span><kbd>E</kbd> Interact</span><span><kbd>${holding ? 'Q' : 'C'}</kbd> ${holding ? 'Put down' : 'Photo'}</span><span><kbd>Tab</kbd> Supplies</span><span><kbd>P</kbd> Pause</span>`;
+      : `<span><kbd>W A S D</kbd> Walk</span><span><kbd>E</kbd> Interact</span><span><kbd>${holding || holdingProp ? 'Q / G' : 'C'}</kbd> ${holding || holdingProp ? 'Drop / throw' : 'Photo'}</span><span><kbd>V</kbd> View</span><span><kbd>Tab</kbd> Supplies</span><span><kbd>P</kbd> Pause</span>`;
     byId('photo-frame').hidden = !photoMode;
     byId('crosshair').hidden = photoMode;
   }

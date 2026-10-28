@@ -4,8 +4,15 @@ export class Input {
   mouseX = 0;
   mouseY = 0;
   locked = false;
+  wheel = 0;
   constructor(public canvas: HTMLCanvasElement) {
     window.addEventListener('keydown', (e) => {
+      const editing =
+        e.target instanceof HTMLElement &&
+        e.target.closest('input, select, textarea, [contenteditable="true"]');
+      if (editing && e.code !== 'Escape') return;
+      const playing = document.getElementById('app')?.dataset.panel === 'playing';
+      if (!playing && e.code !== 'Escape' && e.code !== 'KeyP') return;
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code))
         e.preventDefault();
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
@@ -25,6 +32,14 @@ export class Input {
       }
     });
     canvas.addEventListener('click', () => this.lock());
+    canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        this.wheel += Math.sign(e.deltaY);
+      },
+      { passive: false },
+    );
   }
   lock() {
     const p = this.canvas.requestPointerLock?.();
@@ -42,6 +57,7 @@ export class Input {
   end() {
     this.pressed.clear();
     this.mouseX = this.mouseY = 0;
+    this.wheel = 0;
   }
   clear() {
     this.keys.clear();

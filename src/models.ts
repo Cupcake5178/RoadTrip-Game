@@ -2,6 +2,7 @@ import * as T from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { ItemId } from './state';
+import { createCharacter } from './character';
 
 const mats = new Map<string, T.MeshStandardMaterial>();
 export function material(color: T.ColorRepresentation, roughness = 0.86) {
@@ -119,29 +120,14 @@ export function pine(color = '#4d7661') {
 export function broadTree() {
   const g = new T.Group();
   cylinder(g, 0.28, 2.6, [0, 1.3, 0], '#897155', 0.16, 6);
-  sphere(g, 1.8, [0, 3.3, 0], '#91a266');
-  sphere(g, 1.2, [1.15, 3, 0], '#b3b573');
-  sphere(g, 1.4, [-0.8, 3.2, 0.4], '#80965c');
+  sphere(g, 1.8, [0, 3.3, 0], '#91a266').userData.noCollision = true;
+  sphere(g, 1.2, [1.15, 3, 0], '#b3b573').userData.noCollision = true;
+  sphere(g, 1.4, [-0.8, 3.2, 0.4], '#80965c').userData.noCollision = true;
   g.userData.assetId = 'tree';
   return g;
 }
-export function person(color = '#cba05f') {
-  const g = new T.Group();
-  box(g, [0.47, 0.66, 0.3], [0, 0.92, 0], color, 0.13);
-  const head = sphere(g, 0.235, [0, 1.52, 0], '#deb99b', 2);
-  head.scale.y = 1.15;
-  sphere(g, 0.245, [0, 1.65, 0.03], '#594c40');
-  for (const x of [-0.09, 0.09]) sphere(g, 0.028, [x, 1.53, -0.21], '#333e38');
-  box(g, [0.14, 0.035, 0.03], [0, 1.42, -0.23], '#9b5d46', 0.01);
-  for (const x of [-0.14, 0.14]) {
-    box(g, [0.19, 0.58, 0.22], [x, 0.35, 0], '#4b605e');
-    box(g, [0.22, 0.15, 0.38], [x, 0.09, -0.05], '#e3ddc6');
-  }
-  for (const x of [-0.33, 0.33]) {
-    const arm = box(g, [0.16, 0.54, 0.18], [x, 0.91, 0], color, 0.07);
-    arm.rotation.z = -x * 0.7;
-    sphere(g, 0.105, [x * 1.2, 0.66, -0.02], '#deb99b');
-  }
+export function person(color = '#cba05f', seed = 1) {
+  const g = createCharacter(seed, color);
   g.userData.assetId = 'person';
   return g;
 }
@@ -250,8 +236,9 @@ export function wagon(paint: string): Wagon {
   for (const [x, z, col] of [
     [0.5, 0, '#dfb858'],
     [-0.5, 1.1, '#7fada2'],
+    [0.5, 1.1, '#a48ca9'],
   ] as const) {
-    const p = person(col);
+    const p = person(col, passengers.length * 17 + 8);
     p.position.set(x, 0.83, z);
     p.scale.setScalar(0.78);
     root.add(p);

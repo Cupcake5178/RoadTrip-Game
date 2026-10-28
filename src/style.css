@@ -1596,3 +1596,524 @@ input[type='checkbox'] {
     flex-wrap: wrap;
   }
 }
+
+/* Layout contracts: each HUD region and transient message has its own reserved space. */
+:root {
+  --edge: clamp(20px, 2vw, 38px);
+  --ui-scale: clamp(0.88, calc(100vh / 900), 1);
+}
+#world {
+  z-index: 0;
+}
+#app {
+  z-index: 10;
+  isolation: isolate;
+}
+.overlay {
+  padding: 24px;
+  z-index: 20;
+}
+.home-overlay {
+  display: grid;
+  grid-template-rows: 74px minmax(0, 1fr) 48px;
+  padding: 0;
+}
+.menu-brand {
+  position: static;
+  grid-row: 1;
+  margin: 0 var(--edge);
+  align-self: center;
+}
+.home-content {
+  position: static;
+  grid-row: 2;
+  align-self: center;
+  margin-left: clamp(36px, 7vw, 140px);
+  width: min(480px, 45vw);
+  max-height: 100%;
+}
+.home-content h1 {
+  font-size: clamp(88px, 13.5vh, 146px);
+  line-height: 0.84;
+  letter-spacing: -7px;
+  margin: 24px 0 18px;
+}
+.home-content h1 > i {
+  position: static;
+  display: block;
+  margin: 13px 0 0 7px;
+  transform: rotate(-5deg);
+  font-size: clamp(23px, 3vh, 31px);
+  letter-spacing: -0.8px;
+}
+.home-content > p {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 16px 0;
+}
+.home-actions {
+  margin-top: 19px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 4px;
+  max-width: 450px;
+}
+.home-actions .primary {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.home-actions .quiet {
+  min-width: 0;
+  padding: 10px 8px;
+}
+.route-ticket {
+  margin-top: 22px;
+  padding: 14px 17px;
+  max-width: 450px;
+}
+.home-footer {
+  position: static;
+  grid-row: 3;
+  margin: 0 var(--edge);
+  align-items: center;
+  gap: 20px;
+}
+.scene-caption {
+  right: var(--edge);
+  bottom: 102px;
+  width: 255px;
+}
+.career-chip {
+  top: 32px;
+  right: var(--edge);
+  max-width: 35vw;
+  text-align: right;
+}
+.paper {
+  max-height: calc(100dvh - 48px);
+  width: min(740px, calc(100vw - 48px));
+  padding: clamp(28px, 3vw, 42px);
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+.paper h2 {
+  padding-right: 30px;
+  font-size: clamp(27px, 2.4vw, 36px);
+  overflow-wrap: anywhere;
+}
+.paper h3,
+.panel-desc,
+.note,
+.item-row > div,
+.shop-item > *,
+.route-stop > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.paper-close {
+  z-index: 2;
+  right: 14px;
+  top: 14px;
+}
+.shop-item,
+.route-option,
+.item-row {
+  min-width: 0;
+}
+.item-row > .btn,
+.item-row > .icon {
+  flex-shrink: 0;
+}
+.item-row small {
+  line-height: 1.6;
+}
+.shop-extras {
+  gap: 12px;
+}
+.shop-extras .btn {
+  white-space: normal;
+  flex-shrink: 0;
+}
+.store-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.route-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.controls-grid {
+  grid-template-columns: minmax(130px, 0.8fr) minmax(0, 1fr);
+}
+.controls-grid kbd {
+  line-height: 1.5;
+  white-space: normal;
+}
+.cargo-slots {
+  gap: 4px;
+}
+.cargo-slots i {
+  min-width: 0;
+}
+.journal-paper {
+  width: min(850px, calc(100vw - 48px));
+}
+.journal-rating {
+  flex-wrap: wrap;
+  gap: 15px;
+}
+.journal-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.photo-strip {
+  padding: 25px 10px;
+}
+.photo-strip > figure {
+  flex-basis: 170px;
+}
+.hud-top {
+  inset: var(--edge) var(--edge) auto;
+  align-items: flex-start;
+  gap: 24px;
+}
+.objective {
+  width: clamp(280px, 25vw, 360px);
+  min-width: 0;
+  max-width: none;
+  padding: 15px 19px;
+}
+.objective > h2 {
+  font-size: clamp(19px, 1.5vw, 23px);
+  line-height: 1.2;
+}
+.objective > div {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.top-right {
+  gap: 10px;
+  flex-shrink: 0;
+}
+.trip-weather {
+  min-height: 48px;
+}
+.wallet {
+  min-width: 88px;
+}
+#status-rail {
+  position: absolute;
+  right: var(--edge);
+  top: 132px;
+  width: min(350px, 27vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 30;
+  pointer-events: none;
+}
+#status-rail > #problem-banner,
+#status-rail > #dialogue,
+#status-rail > #toast {
+  position: static;
+  transform: none;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+#status-rail > #problem-banner {
+  padding: 13px 15px;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: left;
+}
+#status-rail > #dialogue {
+  padding: 14px;
+  gap: 10px;
+}
+#status-rail #dialogue p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+#status-rail > #toast {
+  padding: 13px 15px;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+}
+#app:not([data-panel='playing']) #status-rail {
+  top: auto;
+  bottom: 22px;
+  right: 22px;
+  width: 330px;
+}
+#app:not([data-panel='playing']) #problem-banner,
+#app:not([data-panel='playing']) #dialogue {
+  display: none;
+}
+.hud-bottom {
+  left: var(--edge);
+  right: var(--edge);
+  bottom: 80px;
+  display: grid;
+  grid-template-columns: minmax(0, 310px) minmax(0, 1fr) 196px;
+  gap: 24px;
+  align-items: end;
+}
+.hud-bottom > :first-child {
+  grid-column: 1;
+  min-width: 0;
+}
+.route-peek {
+  grid-column: 3;
+  width: 100%;
+}
+.vehicle-hud {
+  width: 100%;
+  max-width: 310px;
+  padding: 17px 20px;
+}
+#passengers {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+.passenger-chip {
+  flex: 1;
+  min-width: 0;
+  gap: 6px;
+}
+.passenger-chip > div {
+  min-width: 0;
+}
+.passenger-chip > span {
+  flex-shrink: 0;
+}
+.passenger-chip small {
+  display: none;
+}
+.passenger-chip strong {
+  font-size: 10px;
+}
+.mode-label {
+  line-height: 1.6;
+  max-width: 100%;
+}
+#interaction {
+  bottom: 128px;
+  left: 50%;
+  width: max-content;
+  min-width: 170px;
+  max-width: min(440px, calc(100vw - 730px));
+  padding: 13px 17px;
+}
+#interaction > div {
+  min-width: 0;
+}
+#interaction strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+#interaction small {
+  font-size: 10px;
+  line-height: 1.5;
+}
+#interaction > kbd {
+  flex-shrink: 0;
+}
+.key-hints {
+  bottom: 21px;
+  left: var(--edge);
+  right: var(--edge);
+  gap: 20px;
+  font-size: 10px;
+  flex-wrap: wrap;
+  line-height: 1.5;
+}
+.key-hints kbd {
+  font-size: 9px;
+}
+#photo-frame {
+  inset: 36px;
+  z-index: 3;
+}
+#hud:has(#photo-frame:not([hidden])) .hud-top,
+#hud:has(#photo-frame:not([hidden])) .hud-bottom,
+#hud:has(#photo-frame:not([hidden])) .key-hints {
+  visibility: hidden;
+}
+#app:has(#photo-frame:not([hidden])) #status-rail {
+  visibility: hidden;
+}
+@media (max-height: 800px) and (min-width: 1000px) {
+  .home-content h1 {
+    font-size: 94px;
+    margin: 18px 0 15px;
+  }
+  .home-content h1 > i {
+    font-size: 24px;
+    margin-top: 10px;
+  }
+  .home-content > p {
+    font-size: 12px;
+    margin: 12px 0;
+  }
+  .home-actions {
+    margin-top: 15px;
+    gap: 8px 4px;
+  }
+  .home-actions .large {
+    min-height: 49px;
+  }
+  .route-ticket {
+    margin-top: 17px;
+    padding: 12px 15px;
+  }
+  .home-overlay {
+    grid-template-rows: 68px minmax(0, 1fr) 42px;
+  }
+  .scene-caption {
+    bottom: 80px;
+  }
+  .hud-bottom {
+    bottom: 73px;
+  }
+  #status-rail {
+    top: 130px;
+    width: 300px;
+  }
+  #status-rail > #dialogue {
+    padding: 11px 13px;
+  }
+}
+@media (max-width: 999px) {
+  .home-content {
+    width: min(480px, 72vw);
+    margin-left: 6vw;
+  }
+  .scene-caption,
+  .ticket-meta {
+    display: none;
+  }
+  .hud-bottom {
+    grid-template-columns: 260px 1fr 160px;
+    gap: 16px;
+  }
+  #interaction {
+    bottom: 230px;
+    max-width: 420px;
+  }
+  #status-rail {
+    width: 280px;
+    top: 130px;
+  }
+  .trip-weather #weather {
+    display: none;
+  }
+  .controls-grid {
+    gap: 12px;
+  }
+}
+@media (max-width: 600px) {
+  .home-overlay {
+    grid-template-rows: 65px minmax(0, 1fr) 44px;
+  }
+  .home-content {
+    width: 87%;
+  }
+  .home-content h1 {
+    font-size: 86px;
+  }
+  .edition {
+    font-size: 7px;
+  }
+  .menu-brand {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+  .home-footer {
+    font-size: 7px;
+  }
+  .paper {
+    width: calc(100vw - 28px);
+    max-height: calc(100dvh - 28px);
+    padding: 25px 20px;
+  }
+  .store-grid,
+  .route-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .item-row {
+    flex-wrap: wrap;
+  }
+  .hud-top {
+    gap: 10px;
+  }
+  .objective {
+    width: min(235px, 60vw);
+    padding: 11px 13px;
+  }
+  .top-right .trip-weather {
+    display: none;
+  }
+  .wallet {
+    min-width: 65px;
+    padding: 10px;
+  }
+  .hud-bottom {
+    display: flex;
+  }
+  .route-peek {
+    display: none;
+  }
+  .vehicle-hud {
+    width: 250px;
+  }
+  #status-rail {
+    right: 15px;
+    top: 137px;
+    width: 240px;
+  }
+  #interaction {
+    max-width: calc(100vw - 36px);
+    bottom: 226px;
+  }
+  .key-hints > span:nth-child(n + 4) {
+    display: none;
+  }
+}
+/* Keep menu feedback in a footer lane, clear of scrollable content. */
+.overlay:not(.home-overlay) {
+  padding-bottom: 128px;
+}
+.paper {
+  max-height: calc(100dvh - 152px);
+}
+#app[data-panel='home'] #status-rail {
+  top: 110px;
+  bottom: auto;
+}
+.gauges b {
+  font-size: 11px;
+}
+.passenger-chip strong {
+  font-size: 12px;
+}
+.route-peek > small {
+  font-size: 11px;
+}
+.key-hints {
+  font-size: 11px;
+}
+#photo-frame {
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+/* Tilted glyphs must not paint over the following paragraph. */
+.home-content h1 {
+  transform: none;
+}
+.home-content h1 > i {
+  transform: none;
+  line-height: 1.4;
+  min-height: 40px;
+  margin-top: 16px;
+}
